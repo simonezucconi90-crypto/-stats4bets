@@ -1,20 +1,24 @@
-# Stats4Bets App completa
+# Stats4Bets FINAL
 
 Funzioni:
-- caricamento multiplo screenshot/PDF;
-- lettura automatica con OpenAI API;
-- controllo e correzione prima del salvataggio;
-- database, ricerca, modifica ed eliminazione;
-- aggiornamento risultati e profitto;
-- dashboard;
-- filtri;
-- migliori combinazioni;
+- accesso protetto da password;
+- database permanente Supabase;
+- caricamento multiplo di screenshot/PDF;
+- lettura automatica tramite OpenAI;
+- controllo prima del salvataggio;
 - importazione del vecchio Excel;
-- esportazione Excel e CSV;
-- persistenza con Supabase.
+- database, ricerca, modifica ed eliminazione;
+- aggiornamento V/P e profitto automatico;
+- dashboard;
+- filtri manuali;
+- ricerca automatica delle combinazioni fino a 3 filtri;
+- punteggio che penalizza i campioni piccoli;
+- esportazione Excel e CSV.
 
-File da caricare su GitHub:
-- app.py
-- requirements.txt
-- README.md
-- supabase_schema.sql
+Secrets Streamlit:
+
+APP_PASSWORD = "scegli_una_password"
+SUPABASE_URL = "..."
+SUPABASE_KEY = "..."
+OPENAI_API_KEY = "..."
+OPENAI_MODEL = "gpt-4.1-mini"

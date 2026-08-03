@@ -92,6 +92,23 @@ def secret(name, default=""):
         pass
     return os.getenv(name, default)
 
+
+def require_login():
+    password = secret("APP_PASSWORD")
+    if not password:
+        st.warning("Configura APP_PASSWORD nelle Secrets di Streamlit.")
+        st.stop()
+    if st.session_state.get("authenticated"):
+        return
+    st.title("🔐 Stats4Bets")
+    entered = st.text_input("Password dell'app", type="password")
+    if st.button("Entra", type="primary"):
+        if entered == password:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        st.error("Password errata.")
+    st.stop()
+
 def use_supabase():
     return bool(secret("SUPABASE_URL") and secret("SUPABASE_KEY"))
 
@@ -294,41 +311,75 @@ def summary(df):
         "avg_odds": float(pd.to_numeric(closed["played_odds"], errors="coerce").mean()) if len(closed) else 0,
     }
 
+
 def combo_table(df, min_sample=3, max_filters=3):
     closed = df[df["outcome"].isin(["V","P"])].copy()
     if closed.empty:
         return pd.DataFrame()
-    dims = {
-        "ALLB VE":("allibramento_color","VE"),
-        "ALLB GI":("allibramento_color","GI"),
-        "ALLB VI":("allibramento_color","VI"),
-        "ALLB RO":("allibramento_color","RO"),
-        "SCL VE":("scl","VE"), "SCL GI":("scl","GI"),
-        "MTR VE":("mtr","VE"), "MTR GI":("mtr","GI"),
+
+    dims = {}
+    categorical = {
+        "ALLB": "allibramento_color",
+        "SCL": "scl",
+        "MTR": "mtr",
+        "C.AFF": "c_aff",
+        "FLBK": "flbk",
+        "C.FB": "c_fb",
+        "QRA/QA": "qra_qa",
+        "QI/QA": "qi_qa",
+        "CAL": "cal",
+        "STATUS": "status",
+        "Campionato": "league",
     }
+
+    for label, column in categorical.items():
+        if column not in closed.columns:
+            continue
+        for value in closed[column].dropna().astype(str).unique():
+            if value and value.lower() != "nan":
+                dims[f"{label}={value}"] = (column, value)
+
     dims.update({label:(col,1) for label,col in METHOD_COLUMNS.items()})
+
     results = []
     items = list(dims.items())
-    for size in range(1, max_filters+1):
-        for combo in combinations(items,size):
-            cols = [spec[0] for _,spec in combo]
+    for size in range(1, max_filters + 1):
+        for combo in combinations(items, size):
+            cols = [spec[0] for _, spec in combo]
             if len(cols) != len(set(cols)):
                 continue
-            sub = closed.copy()
-            for _,(col,val) in combo:
-                sub = sub[sub[col] == val]
-            if len(sub) < min_sample:
+
+            subset = closed.copy()
+            for _, (column, value) in combo:
+                subset = subset[subset[column] == value]
+
+            if len(subset) < min_sample:
                 continue
-            s = summary(sub)
+
+            s = summary(subset)
+            reliability = min(1.0, s["closed"] / max(30, min_sample * 3))
+            score = (s["roi"] * reliability) + ((s["profit"] / 20) * reliability)
+
             results.append({
-                "Combinazione":" + ".join(label for label,_ in combo),
-                "Partite":s["closed"],"Vinte":s["wins"],
-                "Win rate %":round(s["win_rate"],2),
-                "Quota media":round(s["avg_odds"],2),
-                "Profitto €":round(s["profit"],2),
-                "ROI %":round(s["roi"],2),
+                "Combinazione": " + ".join(label for label, _ in combo),
+                "Partite": s["closed"],
+                "Vinte": s["wins"],
+                "Perse": s["losses"],
+                "Win rate %": round(s["win_rate"], 2),
+                "Quota media": round(s["avg_odds"], 2),
+                "Profitto €": round(s["profit"], 2),
+                "ROI %": round(s["roi"], 2),
+                "Affidabilità %": round(reliability * 100, 1),
+                "Punteggio": round(score, 2),
             })
-    return pd.DataFrame(results).sort_values(["Profitto €","ROI %","Partite"], ascending=[False,False,False]) if results else pd.DataFrame()
+
+    if not results:
+        return pd.DataFrame()
+
+    return pd.DataFrame(results).sort_values(
+        ["Punteggio", "Profitto €", "ROI %", "Partite"],
+        ascending=[False, False, False, False]
+    )
 
 def editor_form(data, prefix):
     left, right = st.columns(2)
@@ -364,13 +415,15 @@ def editor_form(data, prefix):
         data[col] = 1 if cols[i%3].checkbox(label, value=bool(data.get(col,0)), key=f"{prefix}_{col}") else 0
     return data
 
+require_login()
+
 st.title("📊 Stats4Bets")
 st.caption(f"Archivio e analisi partite • Archivio: {storage_label()}")
 
 page = st.sidebar.radio("Menu", [
     "🏠 Home","➕ Nuova partita","📋 Database","🏆 Aggiorna risultato",
     "✏️ Modifica/Elimina","📊 Dashboard","🔎 Analisi filtri",
-    "🥇 Migliori combinazioni","📥 Importa/Esporta","⚙️ Configurazione"
+    "🧠 Trova metodo migliore","📥 Importa/Esporta","⚙️ Configurazione"
 ])
 
 if page == "🏠 Home":
@@ -519,8 +572,8 @@ elif page == "🔎 Analisi filtri":
         }]), hide_index=True, use_container_width=True)
         st.dataframe(filtered, hide_index=True, use_container_width=True)
 
-elif page == "🥇 Migliori combinazioni":
-    st.subheader("🥇 Migliori combinazioni")
+elif page == "🧠 Trova metodo migliore":
+    st.subheader("🧠 Trova metodo migliore")
     df = get_matches()
     minimum = st.slider("Campione minimo",1,100,3)
     maximum = st.slider("Numero massimo filtri",1,3,2)
@@ -528,6 +581,12 @@ elif page == "🥇 Migliori combinazioni":
     if result.empty:
         st.info("Servono più partite concluse o un campione minimo più basso.")
     else:
+        best = result.iloc[0]
+        st.success(
+            f'Combinazione migliore attuale: {best["Combinazione"]}\n\n'
+            f'Profitto € {best["Profitto €"]:.2f} • ROI {best["ROI %"]:.2f}% • '
+            f'Partite {int(best["Partite"])} • Affidabilità {best["Affidabilità %"]:.1f}%'
+        )
         st.dataframe(result, hide_index=True, use_container_width=True)
 
 elif page == "📥 Importa/Esporta":
