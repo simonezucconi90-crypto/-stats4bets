@@ -235,61 +235,23 @@ def parse_json_text(text):
             text = text[4:]
     return json.loads(text.strip())
 
+
 def extract_file(uploaded):
-    api_key = secret("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("Manca OPENAI_API_KEY nelle Secrets di Streamlit.")
+    if uploaded.type == "application/pdf":
+        raise RuntimeError("L'OCR gratuito legge immagini PNG/JPG/WEBP. Per un PDF salva uno screenshot della pagina.")
 
-    from openai import OpenAI
-    client = OpenAI(api_key=api_key)
+    from free_ocr import read_screenshot
+    extracted, ocr_text = read_screenshot(uploaded.getvalue())
 
-    raw = uploaded.getvalue()
-    mime = uploaded.type or "image/png"
-    if mime == "application/pdf":
-        file_obj = client.files.create(
-            file=(uploaded.name, raw, mime),
-            purpose="user_data"
-        )
-        file_item = {"type": "input_file", "file_id": file_obj.id}
-    else:
-        encoded = base64.b64encode(raw).decode("utf-8")
-        file_item = {
-            "type": "input_image",
-            "image_url": f"data:{mime};base64,{encoded}",
-        }
-
-    prompt = """
-Leggi la schermata Stats4Bets/SuperFoglio e restituisci SOLO JSON valido.
-Campi:
-date YYYY-MM-DD, time, league, match_name, round_name, market, pick,
-selected_by_ale, associated_method, prob_1, prob_x, prob_2,
-fair_odds, opening_odds, current_odds, c_aff, flbk, c_fb, qra_qa,
-qi_qa, allibramento_color, allibramento_value, allibramento_avg,
-allb, mtr, scl, cal, status, method_flags.
-
-Regole:
-- percentuali come 61.6 e non 0.616;
-- colori solo VE, GI, VI, RO;
-- associated_method separato con " | ";
-- method_flags deve contenere esattamente:
-  1X2, Over 1.5, Over 2.5, Under 2.5, Under 3.5,
-  Multigol 1-3, Multigol 1-4, Formula 4, Easy Over, Super Over;
-- non inventare valori illeggibili.
-"""
-    response = client.responses.create(
-        model=secret("OPENAI_MODEL", "gpt-4.1-mini"),
-        input=[{
-            "role": "user",
-            "content": [{"type": "input_text", "text": prompt}, file_item],
-        }],
-    )
-    extracted = parse_json_text(response.output_text)
     data = blank_match()
     data.update(extracted)
     flags = extracted.get("method_flags", {})
-    for label, col in METHOD_COLUMNS.items():
-        data[col] = 1 if flags.get(label) else 0
+    for label, column in METHOD_COLUMNS.items():
+        data[column] = 1 if flags.get(label) else 0
+
+    data["stake"] = 20.0
     data["played_odds"] = float(data.get("current_odds") or 0)
+    data["_ocr_text"] = ocr_text
     return data
 
 def summary(df):
@@ -457,6 +419,9 @@ elif page == "➕ Nuova partita":
     if drafts:
         index = st.selectbox("Partita da controllare", range(len(drafts)), format_func=lambda i: f"{i+1} — {drafts[i].get('match_name') or 'Senza nome'}")
         data = editor_form(drafts[index], f"draft_{index}")
+        if drafts[index].get("_ocr_text"):
+            with st.expander("Testo letto dall’OCR"):
+                st.text(drafts[index]["_ocr_text"])
         drafts[index] = data
         st.session_state["drafts"] = drafts
         if st.button("✅ Salva questa partita", type="primary"):
