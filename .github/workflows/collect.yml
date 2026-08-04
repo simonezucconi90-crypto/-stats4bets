@@ -1,10 +1,7 @@
-name: Stats4Bets Collector Step 2
+name: Stats4Bets Collector Step 1
 
-"on":
-  workflow_dispatch: {}
-  push:
-    branches:
-      - main
+on:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,9 +12,11 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Scarica repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Configura Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
@@ -27,16 +26,18 @@ jobs:
           pip install -r requirements-collector.txt
           playwright install --with-deps chromium
 
-      - name: Estrai Ottimo 1 di oggi
+      - name: Login e apertura MindBet
         env:
           STATS4BETS_USER: ${{ secrets.STATS4BETS_USER }}
           STATS4BETS_PASSWORD: ${{ secrets.STATS4BETS_PASSWORD }}
+          STATS4BETS_LOGIN_URL: https://superfoglio.it/
         run: python collector.py
 
-      - name: Carica risultati
+      - name: Carica screenshot e HTML diagnostici
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: stats4bets-step2-artifacts
+          name: stats4bets-step1-artifacts
           path: collector_artifacts/
+          if-no-files-found: warn
           retention-days: 7
