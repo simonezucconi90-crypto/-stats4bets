@@ -5,7 +5,9 @@ import re
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
 
+from bs4 import BeautifulSoup
 from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
     sync_playwright,
@@ -98,6 +100,147 @@ def login(page):
         page.wait_for_timeout(5000)
 
 
+def clean_text(value):
+    return re.sub(r"\s+", " ", value or "").strip()
+
+
+def parse_date_time_status(block):
+    parts = [clean_text(x) for x in block.stripped_strings]
+    date = parts[0] if len(parts) > 0 else ""
+    time = parts[1] if len(parts) > 1 else ""
+    status = parts[2] if len(parts) > 2 else ""
+    return date, time, status
+
+
+def date_to_iso(value):
+    match = re.fullmatch(r"(\d{2})-(\d{2})-(\d{2})", value)
+    if not match:
+        return ""
+    day, month, year = match.groups()
+    return f"20{year}-{month}-{day}"
+
+
+def parse_mobile_cards(html):
+    soup = BeautifulSoup(html, "html.parser")
+
+    mobile_grid = soup.select_one("div.grid.lg\\:hidden.grid-cols-1.gap-6.mb-6")
+    if mobile_grid is None:
+        raise RuntimeError("Contenitore mobile delle partite non trovato.")
+
+    today = datetime.now(ZoneInfo("Europe/Rome")).strftime("%Y-%m-%d")
+    rows = []
+    seen_ids = set()
+
+    for card in mobile_grid.find_all("div", recursive=False):
+        match_id = clean_text(card.get("id", ""))
+        if not match_id.isdigit() or match_id in seen_ids:
+            continue
+
+        direct_blocks = card.find_all("div", recursive=False)
+        if len(direct_blocks) < 5:
+            continue
+
+        date_text, time_text, status = parse_date_time_status(direct_blocks[0])
+        date_iso = date_to_iso(date_text)
+
+        league_link = direct_blocks[1].find("a")
+        league = clean_text(league_link.get_text(" ", strip=True)) if league_link else ""
+        round_name = ""
+        league_spans = direct_blocks[1].find_all("span", recursive=False)
+        if len(league_spans) > 1:
+            round_name = clean_text(league_spans[1].get_text(" ", strip=True))
+
+        teams_span = direct_blocks[2].find(
+            "span",
+            class_=lambda classes: classes and "labelm" in classes,
+        )
+        teams = []
+        if teams_span:
+            teams = [clean_text(x) for x in teams_span.stripped_strings if clean_text(x)]
+
+        home_team = teams[0] if len(teams) > 0 else ""
+        away_team = teams[1] if len(teams) > 1 else ""
+
+        prediction_block = direct_blocks[3]
+        prediction_spans = prediction_block.find_all("span", recursive=False)
+        prediction = (
+            clean_text(prediction_spans[0].get_text(" ", strip=True))
+            if len(prediction_spans) > 0
+            else ""
+        )
+        odds = (
+            clean_text(prediction_spans[1].get_text(" ", strip=True)).replace(",", ".")
+            if len(prediction_spans) > 1
+            else ""
+        )
+        result = (
+            clean_text(prediction_spans[2].get_text(" ", strip=True))
+            if len(prediction_spans) > 2
+            else ""
+        )
+
+        detail_link = card.select_one('a[href*="statistiche.php?id="]')
+        detail_url = urljoin(TARGET_URL, detail_link.get("href")) if detail_link else ""
+
+        if date_iso != today:
+            continue
+        if prediction.casefold() != "ottimo 1":
+            continue
+
+        seen_ids.add(match_id)
+        rows.append(
+            {
+                "match_id": match_id,
+                "date": date_iso,
+                "time": time_text,
+                "status": status,
+                "league": league,
+                "round_name": round_name,
+                "home_team": home_team,
+                "away_team": away_team,
+                "match_name": f"{home_team} - {away_team}".strip(" -"),
+                "selection": prediction,
+                "odds": odds,
+                "result": result,
+                "detail_url": detail_url,
+            }
+        )
+
+    rows.sort(key=lambda row: (row["date"], row["time"], row["match_id"]))
+    return rows
+
+
+def save_results(rows):
+    json_path = OUT / "ottimo1_today.json"
+    csv_path = OUT / "ottimo1_today.csv"
+
+    json_path.write_text(
+        json.dumps(rows, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    fields = [
+        "match_id",
+        "date",
+        "time",
+        "status",
+        "league",
+        "round_name",
+        "home_team",
+        "away_team",
+        "match_name",
+        "selection",
+        "odds",
+        "result",
+        "detail_url",
+    ]
+
+    with csv_path.open("w", newline="", encoding="utf-8-sig") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def save_debug(page):
     page.screenshot(
         path=str(OUT / "mindbet_page.png"),
@@ -107,191 +250,46 @@ def save_debug(page):
         page.content(),
         encoding="utf-8",
     )
-    (OUT / "mindbet_page_url.txt").write_text(
-        page.url,
-        encoding="utf-8",
-    )
-
-
-def card_text(link):
-    locator = link
-
-    for _ in range(8):
-        try:
-            text = re.sub(
-                r"\s+",
-                " ",
-                locator.inner_text(timeout=2000),
-            ).strip()
-        except Exception:
-            text = ""
-
-        if (
-            "OTTIMO 1" in text.upper()
-            and re.search(r"\d{2}-\d{2}-\d{2}", text)
-        ):
-            return text
-
-        locator = locator.locator("..")
-
-    return ""
-
-
-def parse_date(text):
-    match = re.search(r"(\d{2})-(\d{2})-(\d{2})", text)
-
-    if not match:
-        return ""
-
-    day, month, year = match.groups()
-    return f"20{year}-{month}-{day}"
-
-
-def parse_time(text):
-    match = re.search(
-        r"\b([01]\d|2[0-3]):[0-5]\d\b",
-        text,
-    )
-    return match.group(0) if match else ""
-
-
-def parse_odds(text):
-    values = re.findall(
-        r"(?<![\d-])(\d{1,2}[.,]\d{2})(?!\d)",
-        text,
-    )
-    return values[-1].replace(",", ".") if values else ""
-
-
-def collect_today_ottimo1(page):
-    today = datetime.now().strftime("%Y-%m-%d")
-    anchors = page.locator('a[href*="statistiche.php?id="]')
-
-    seen_urls = set()
-    rows = []
-
-    for index in range(anchors.count()):
-        anchor = anchors.nth(index)
-        href = anchor.get_attribute("href")
-
-        if not href:
-            continue
-
-        detail_url = urljoin(page.url, href)
-
-        if detail_url in seen_urls:
-            continue
-
-        text = card_text(anchor)
-
-        if "OTTIMO 1" not in text.upper():
-            continue
-
-        if parse_date(text) != today:
-            continue
-
-        seen_urls.add(detail_url)
-
-        rows.append(
-            {
-                "date": parse_date(text),
-                "time": parse_time(text),
-                "selection": "Ottimo 1",
-                "odds": parse_odds(text),
-                "detail_url": detail_url,
-                "raw_card_text": text,
-            }
-        )
-
-    return rows
-
-
-def save_rows(rows):
-    json_path = OUT / "ottimo1_today.json"
-    csv_path = OUT / "ottimo1_today.csv"
-
-    json_path.write_text(
-        json.dumps(
-            rows,
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-
-    fieldnames = [
-        "date",
-        "time",
-        "selection",
-        "odds",
-        "detail_url",
-        "raw_card_text",
-    ]
-
-    with csv_path.open(
-        "w",
-        newline="",
-        encoding="utf-8-sig",
-    ) as file:
-        writer = csv.DictWriter(
-            file,
-            fieldnames=fieldnames,
-        )
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
-
         context = browser.new_context(
             locale="it-IT",
             timezone_id="Europe/Rome",
-            viewport={
-                "width": 1440,
-                "height": 1200,
-            },
+            viewport={"width": 1440, "height": 1200},
         )
-
         page = context.new_page()
 
-        page.goto(
-            LOGIN_URL,
-            wait_until="domcontentloaded",
-            timeout=60000,
-        )
+        page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(2500)
 
         if page.locator('input[type="password"]').count() > 0:
             login(page)
 
-        page.goto(
-            TARGET_URL,
-            wait_until="domcontentloaded",
-            timeout=60000,
-        )
+        page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(5000)
+
+        if page.locator('input[type="password"]').count() > 0:
+            raise RuntimeError("Login non riuscito o sessione non mantenuta.")
 
         save_debug(page)
 
-        if page.locator('input[type="password"]').count() > 0:
-            raise RuntimeError(
-                "Login non riuscito o sessione non mantenuta."
-            )
-
-        rows = collect_today_ottimo1(page)
-        save_rows(rows)
+        rows = parse_mobile_cards(page.content())
+        save_results(rows)
 
         print(f"Ottimo 1 trovate oggi: {len(rows)}")
-
         for row in rows:
-            print(row)
+            print(
+                f'{row["time"]} | {row["match_name"]} | '
+                f'{row["league"]} | {row["odds"]} | {row["detail_url"]}'
+            )
 
         if not rows:
             raise RuntimeError(
-                "Nessuna Ottimo 1 trovata oggi. "
-                "Controlla gli artifact del workflow."
+                "Nessuna Ottimo 1 trovata per la data corrente. "
+                "Controlla mindbet_page.html negli artifact."
             )
 
         browser.close()
