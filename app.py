@@ -3,10 +3,12 @@ import io
 import json
 import os
 import sqlite3
+import time
 from datetime import datetime
 from itertools import combinations
 
 import pandas as pd
+import requests
 import streamlit as st
 
 st.set_page_config(page_title="Stats4Bets", page_icon="📊", layout="wide")
@@ -91,6 +93,91 @@ def secret(name, default=""):
     except Exception:
         pass
     return os.getenv(name, default)
+
+
+
+def github_configured():
+    return all([
+        secret("GITHUB_TOKEN"),
+        secret("GITHUB_OWNER"),
+        secret("GITHUB_REPO"),
+        secret("GITHUB_WORKFLOW"),
+    ])
+
+
+def github_headers():
+    return {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f'Bearer {secret("GITHUB_TOKEN")}',
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def trigger_collector_workflow():
+    owner = secret("GITHUB_OWNER")
+    repo = secret("GITHUB_REPO")
+    workflow = secret("GITHUB_WORKFLOW")
+    url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow}/dispatches"
+    response = requests.post(
+        url,
+        headers=github_headers(),
+        json={"ref": "main"},
+        timeout=30,
+    )
+    if response.status_code != 204:
+        try:
+            detail = response.json()
+        except Exception:
+            detail = response.text
+        raise RuntimeError(
+            f"GitHub ha risposto con errore {response.status_code}: {detail}"
+        )
+
+
+def latest_collector_run():
+    owner = secret("GITHUB_OWNER")
+    repo = secret("GITHUB_REPO")
+    workflow = secret("GITHUB_WORKFLOW")
+    url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow}/runs"
+    response = requests.get(
+        url,
+        headers=github_headers(),
+        params={"branch": "main", "per_page": 1},
+        timeout=30,
+    )
+    if response.status_code != 200:
+        try:
+            detail = response.json()
+        except Exception:
+            detail = response.text
+        raise RuntimeError(
+            f"Impossibile leggere lo stato del workflow ({response.status_code}): {detail}"
+        )
+    runs = response.json().get("workflow_runs", [])
+    return runs[0] if runs else None
+
+
+def wait_for_collector(timeout_seconds=150, poll_seconds=5):
+    start = time.time()
+    initial = latest_collector_run()
+    initial_id = initial.get("id") if initial else None
+
+    while time.time() - start < timeout_seconds:
+        run = latest_collector_run()
+        if run:
+            run_id = run.get("id")
+            status = run.get("status")
+            conclusion = run.get("conclusion")
+            if run_id != initial_id or status in {"queued", "in_progress", "completed"}:
+                if status == "completed":
+                    return {
+                        "ok": conclusion == "success",
+                        "conclusion": conclusion,
+                        "url": run.get("html_url", ""),
+                    }
+        time.sleep(poll_seconds)
+
+    return {"ok": False, "conclusion": "timeout", "url": ""}
 
 
 def require_login():
@@ -455,7 +542,50 @@ if page == "⚡ Inserimento rapido":
 elif page == "🏠 Home":
 
     st.subheader("Gestione completa dal telefono")
-    st.info("Apri il menu laterale e scegli ⚡ Inserimento rapido per aggiungere una partita.")
+
+    st.markdown("### 🔄 Aggiornamento automatico")
+    update_col, refresh_col = st.columns([2, 1])
+
+    with update_col:
+        if not github_configured():
+            st.warning(
+                "Configura GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO e "
+                "GITHUB_WORKFLOW nei Secrets di Streamlit."
+            )
+        elif st.button(
+            "🔄 Aggiorna partite da Stats4Bets",
+            type="primary",
+            use_container_width=True,
+        ):
+            try:
+                trigger_collector_workflow()
+                st.success("Workflow avviato. Attendo il completamento...")
+                with st.spinner("Aggiornamento in corso: attendi circa 1-2 minuti..."):
+                    result = wait_for_collector()
+
+                if result["ok"]:
+                    st.success("✅ Aggiornamento completato.")
+                    time.sleep(1)
+                    st.rerun()
+                elif result["conclusion"] == "timeout":
+                    st.warning(
+                        "Il workflow è partito ma non ha terminato entro il tempo di attesa. "
+                        "Premi «Ricarica dati» tra un minuto."
+                    )
+                else:
+                    st.error(
+                        f'Workflow terminato con esito: {result["conclusion"]}.'
+                    )
+                    if result.get("url"):
+                        st.link_button("Apri il dettaglio su GitHub", result["url"])
+            except Exception as exc:
+                st.error(f"Non sono riuscito ad avviare l'aggiornamento: {exc}")
+
+    with refresh_col:
+        if st.button("↻ Ricarica dati", use_container_width=True):
+            st.rerun()
+
+    st.info("Premi «Aggiorna partite da Stats4Bets» per importare le nuove Ottimo 1.")
     c1,c2,c3 = st.columns(3)
     c1.info("➕ Carica screenshot/PDF e salva la partita")
     c2.info("🏆 Aggiorna risultato, ritorno e profitto")
