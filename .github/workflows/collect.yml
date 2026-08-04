@@ -1,10 +1,7 @@
-name: Stats4Bets Collector Step 3 Dettagli
+name: Stats4Bets Collector Step 4 Supabase
 
 "on":
   workflow_dispatch: {}
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -27,17 +24,10 @@ jobs:
           pip install -r requirements-collector.txt
           playwright install --with-deps chromium
 
-      - name: Estrai dettagli Ottimo 1
+      - name: Estrai e salva su Supabase
         env:
           STATS4BETS_USER: ${{ secrets.STATS4BETS_USER }}
           STATS4BETS_PASSWORD: ${{ secrets.STATS4BETS_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python collector.py
-
-      - name: Carica risultati
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stats4bets-step3-details-artifacts
-          path: collector_artifacts/
-          if-no-files-found: warn
-          retention-days: 7
