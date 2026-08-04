@@ -383,13 +383,79 @@ st.title("📊 Stats4Bets")
 st.caption(f"Archivio e analisi partite • Archivio: {storage_label()}")
 
 page = st.sidebar.radio("Menu", [
-    "🏠 Home","➕ Nuova partita","📋 Database","🏆 Aggiorna risultato",
+    "🏠 Home","⚡ Inserimento rapido","➕ Nuova partita","📋 Database","🏆 Aggiorna risultato",
     "✏️ Modifica/Elimina","📊 Dashboard","🔎 Analisi filtri",
     "🧠 Trova metodo migliore","📥 Importa/Esporta","⚙️ Configurazione"
 ])
 
-if page == "🏠 Home":
+if page == "⚡ Inserimento rapido":
+    st.subheader("⚡ Inserimento rapido")
+    st.caption("Compila solo i campi principali. Gli altri sono facoltativi.")
+    record = blank_match()
+    record["id"] = next_id()
+    st.info(f"Nuovo ID automatico: {record['id']}")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        record["date"] = st.date_input("Data", value=datetime.today().date(), key="quick_date").isoformat()
+        record["time"] = st.time_input("Ora", value=datetime.now().replace(second=0, microsecond=0).time(), key="quick_time").strftime("%H:%M")
+        record["league"] = st.text_input("Campionato", placeholder="es. Irlanda B", key="quick_league")
+        record["match_name"] = st.text_input("Partita", placeholder="Casa - Trasferta", key="quick_match")
+        record["selected_by_ale"] = st.selectbox("Metodo principale", ["Ottimo 1", "Ottimo 2", "Altro"], key="quick_selected")
+    with c2:
+        record["market"] = st.selectbox("Mercato", ["1X2", "Over/Under", "GG/NG", "Altro"], key="quick_market")
+        record["pick"] = st.selectbox("Esito giocato", ["1", "X", "2", "1X", "X2", "12", "Over 1.5", "Over 2.5", "Under 3.5", "Altro"], key="quick_pick")
+        record["played_odds"] = st.number_input("Quota giocata", min_value=1.00, value=1.40, step=0.01, key="quick_odds")
+        record["stake"] = st.number_input("Puntata (€)", min_value=0.0, value=20.0, step=1.0, key="quick_stake")
+        record["allibramento_color"] = st.selectbox("Allibramento", ["", "VE", "GI", "VI", "RO"], key="quick_allb")
+
+    st.markdown("### Filtri principali")
+    f1, f2, f3 = st.columns(3)
+    record["scl"] = f1.selectbox("SCL", ["", "VE", "GI", "VI", "RO"], key="quick_scl")
+    record["mtr"] = f2.selectbox("MTR", ["", "VE", "GI", "VI", "RO"], key="quick_mtr")
+    record["status"] = f3.selectbox("STATUS", ["", "VE", "GI", "VI", "RO"], key="quick_status")
+
+    st.markdown("### Metodi associati")
+    selected_methods=[]
+    method_cols=st.columns(3)
+    for idx,(label,column) in enumerate(METHOD_COLUMNS.items()):
+        checked=method_cols[idx%3].checkbox(label,key=f"quick_{column}")
+        record[column]=1 if checked else 0
+        if checked: selected_methods.append(label)
+    record["associated_method"]=" | ".join(selected_methods)
+
+    with st.expander("Campi avanzati facoltativi"):
+        a1,a2=st.columns(2)
+        with a1:
+            record["prob_1"] = st.number_input("Prob. IA 1", value=0.0, step=0.1, key="quick_prob1")
+            record["prob_x"] = st.number_input("Prob. IA X", value=0.0, step=0.1, key="quick_probx")
+            record["prob_2"] = st.number_input("Prob. IA 2", value=0.0, step=0.1, key="quick_prob2")
+            record["fair_odds"] = st.number_input("Quota reale", value=0.0, step=0.01, key="quick_fair")
+            record["opening_odds"] = st.number_input("Quota iniziale", value=0.0, step=0.01, key="quick_open")
+            record["current_odds"] = st.number_input("Quota attuale", value=0.0, step=0.01, key="quick_current")
+        with a2:
+            record["c_aff"] = st.selectbox("C. AFF.", ["", "VE", "GI", "VI", "RO"], key="quick_caff")
+            record["flbk"] = st.selectbox("FLBK", ["", "VE", "GI", "VI", "RO"], key="quick_flbk")
+            record["c_fb"] = st.selectbox("C. FB.", ["", "VE", "GI", "VI", "RO"], key="quick_cfb")
+            record["qra_qa"] = st.selectbox("QRA/QA", ["", "VE", "GI", "VI", "RO"], key="quick_qraqa")
+            record["qi_qa"] = st.selectbox("QI/QA", ["", "VE", "GI", "VI", "RO"], key="quick_qiqa")
+            record["cal"] = st.selectbox("CAL", ["", "VE", "GI", "VI", "RO"], key="quick_cal")
+
+    if st.button("✅ Salva partita", type="primary", use_container_width=True):
+        if not record["match_name"].strip():
+            st.error("Inserisci il nome della partita.")
+        elif not record["league"].strip():
+            st.error("Inserisci il campionato.")
+        else:
+            record["id"] = next_id()
+            insert_match(record)
+            st.success(f"Partita salvata con ID {record['id']}.")
+            st.balloons()
+
+elif page == "🏠 Home":
+
     st.subheader("Gestione completa dal telefono")
+    st.info("Apri il menu laterale e scegli ⚡ Inserimento rapido per aggiungere una partita.")
     c1,c2,c3 = st.columns(3)
     c1.info("➕ Carica screenshot/PDF e salva la partita")
     c2.info("🏆 Aggiorna risultato, ritorno e profitto")
