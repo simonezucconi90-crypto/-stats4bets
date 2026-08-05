@@ -300,21 +300,20 @@ def save_to_supabase(records):
         payload.pop("list_odds", None)
 
         if existing:
-            internal_id = existing[0]["id"]
-
-            # La quota viene congelata al primo inserimento.
-            # Gli aggiornamenti successivi possono aggiornare statistiche e indicatori,
-            # ma non current_odds, played_odds o stake.
-            payload.pop("current_odds", None)
-            payload.pop("played_odds", None)
-            payload.pop("stake", None)
-
-            client.table("matches").update(payload).eq("id", internal_id).execute()
+            # Snapshot immutabile:
+            # se la partita esiste già, NON viene modificata nessuna colonna.
+            # Risultato, esito e profitto sono gestiti esclusivamente
+            # dal workflow separato "Aggiorna risultati e profitti".
+            print(
+                f'SALTATA: source_match_id={source_id} già presente '
+                f'con id={existing[0]["id"]}'
+            )
             updated += 1
+            continue
         else:
             payload["id"] = next_internal_id(client)
 
-            # Quota bloccata al momento in cui l'utente genera/importa la partita.
+            # Congela la quota e la puntata al primo inserimento.
             frozen_odds = float(payload.get("current_odds") or 0)
             payload["current_odds"] = frozen_odds
             payload["played_odds"] = frozen_odds
@@ -358,7 +357,7 @@ def main():
             records.append(parse_detail(page.content(), match))
 
         inserted, updated = save_to_supabase(records)
-        print(f"Completato: {inserted} nuove, {updated} aggiornate.")
+        print(f"Completato: {inserted} nuove, {updated} già presenti e non modificate.")
         browser.close()
 
 
