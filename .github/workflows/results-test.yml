@@ -1,0 +1,33 @@
+name: Stats4Bets Test Risultati API
+
+"on":
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test-results:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Installa dipendenze
+        run: pip install -r requirements-results.txt
+      - name: Cerca risultati senza modificare il database
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python update_results_test.py
+      - name: Carica rapporto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stats4bets-results-test
+          path: results_artifacts/
+          retention-days: 7
