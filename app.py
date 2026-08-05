@@ -517,6 +517,184 @@ def apply_strategy_filters(df, filters, methods, min_odds, max_odds, min_prob, m
     return filtered
 
 
+
+def automatic_strategy_search(df, min_sample=3, max_filters=3, top_n=100):
+    closed = df[df["outcome"].isin(["V", "P"])].copy()
+    if closed.empty:
+        return pd.DataFrame(), {}
+
+    dimensions = {}
+
+    categorical = {
+        "ALLB": "allibramento_color",
+        "MTR": "mtr",
+        "SCL": "scl",
+        "CAL": "cal",
+        "C.AFF.": "c_aff",
+        "FLBK": "flbk",
+        "C.FB.": "c_fb",
+        "QRA/QA": "qra_qa",
+        "QI/QA": "qi_qa",
+        "Campionato": "league",
+    }
+
+    for label, column in categorical.items():
+        if column not in closed.columns:
+            continue
+        values = (
+            closed[column]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .unique()
+        )
+        for value in values:
+            if value and value.lower() not in {"nan", "none"}:
+                key = f"{label}={value}"
+                dimensions[key] = {
+                    "column": column,
+                    "kind": "equals",
+                    "value": value,
+                }
+
+    for label, column in METHOD_COLUMNS.items():
+        if column in closed.columns:
+            dimensions[f"Metodo={label}"] = {
+                "column": column,
+                "kind": "equals_numeric",
+                "value": 1,
+            }
+
+    odds = pd.to_numeric(closed["current_odds"], errors="coerce")
+    odds_bins = [
+        (1.20, 1.39),
+        (1.40, 1.49),
+        (1.50, 1.59),
+        (1.60, 1.69),
+        (1.70, 1.79),
+        (1.80, 1.99),
+        (2.00, 2.49),
+        (2.50, 99.00),
+    ]
+    for low, high in odds_bins:
+        if ((odds >= low) & (odds <= high)).any():
+            label = f"Quota {low:.2f}-{high:.2f}"
+            dimensions[label] = {
+                "column": "current_odds",
+                "kind": "range",
+                "low": low,
+                "high": high,
+            }
+
+    prob = pd.to_numeric(closed["prob_1"], errors="coerce")
+    probability_thresholds = [50, 55, 60, 65, 70, 75, 80]
+    for threshold in probability_thresholds:
+        if (prob >= threshold).any():
+            label = f"Prob.1≥{threshold}%"
+            dimensions[label] = {
+                "column": "prob_1",
+                "kind": "minimum",
+                "value": threshold,
+            }
+
+    items = list(dimensions.items())
+    results = []
+    selections = {}
+
+    for size in range(1, max_filters + 1):
+        for combo in combinations(items, size):
+            labels = [label for label, _ in combo]
+            specs = [spec for _, spec in combo]
+
+            used_columns = [spec["column"] for spec in specs]
+            if len(used_columns) != len(set(used_columns)):
+                continue
+
+            subset = closed.copy()
+
+            for spec in specs:
+                column = spec["column"]
+
+                if spec["kind"] == "equals":
+                    subset = subset[
+                        subset[column].astype(str) == str(spec["value"])
+                    ]
+                elif spec["kind"] == "equals_numeric":
+                    values = pd.to_numeric(
+                        subset[column], errors="coerce"
+                    ).fillna(0)
+                    subset = subset[values == spec["value"]]
+                elif spec["kind"] == "range":
+                    values = pd.to_numeric(
+                        subset[column], errors="coerce"
+                    )
+                    subset = subset[
+                        (values >= spec["low"]) &
+                        (values <= spec["high"])
+                    ]
+                elif spec["kind"] == "minimum":
+                    values = pd.to_numeric(
+                        subset[column], errors="coerce"
+                    )
+                    subset = subset[values >= spec["value"]]
+
+            if len(subset) < min_sample:
+                continue
+
+            stats = summary(subset)
+            if stats["closed"] == 0:
+                continue
+
+            # Penalizza i campioni piccoli senza nascondere il profitto reale.
+            reliability = min(
+                1.0,
+                stats["closed"] / max(30, min_sample * 3)
+            )
+
+            # Punteggio bilanciato: ROI, profitto e affidabilità.
+            score = (
+                stats["roi"] * reliability
+                + (stats["profit"] / 20.0) * reliability
+                + stats["win_rate"] * 0.05 * reliability
+            )
+
+            strategy_name = " + ".join(labels)
+            strategy_id = f"S{len(results)+1:05d}"
+
+            results.append({
+                "ID": strategy_id,
+                "Strategia": strategy_name,
+                "Partite": stats["closed"],
+                "Vinte": stats["wins"],
+                "Perse": stats["losses"],
+                "Win rate %": round(stats["win_rate"], 2),
+                "Quota media": round(stats["avg_odds"], 2),
+                "Profitto €": round(stats["profit"], 2),
+                "ROI %": round(stats["roi"], 2),
+                "Affidabilità %": round(reliability * 100, 1),
+                "Punteggio": round(score, 2),
+            })
+
+            selections[strategy_id] = subset.index.tolist()
+
+    if not results:
+        return pd.DataFrame(), {}
+
+    table = pd.DataFrame(results).sort_values(
+        ["Punteggio", "Profitto €", "ROI %", "Partite"],
+        ascending=[False, False, False, False],
+    ).head(top_n)
+
+    valid_ids = set(table["ID"])
+    selections = {
+        strategy_id: indices
+        for strategy_id, indices in selections.items()
+        if strategy_id in valid_ids
+    }
+
+    return table.reset_index(drop=True), selections
+
+
 def editor_form(data, prefix):
     left, right = st.columns(2)
     with left:
@@ -997,21 +1175,162 @@ elif page == "🧪 Laboratorio Strategie":
 
 
 elif page == "🧠 Trova metodo migliore":
-    st.subheader("🧠 Trova metodo migliore")
+    st.subheader("🧠 Trova automaticamente le migliori strategie")
+    st.caption(
+        "Il motore prova combinazioni di indicatori, metodi, "
+        "fasce quota e soglie di probabilità."
+    )
+
     df = get_matches()
-    minimum = st.slider("Campione minimo",1,100,3)
-    maximum = st.slider("Numero massimo filtri",1,3,2)
-    result = combo_table(df,minimum,maximum)
-    if result.empty:
-        st.info("Servono più partite concluse o un campione minimo più basso.")
+    closed = df[df["outcome"].isin(["V", "P"])].copy() if not df.empty else df
+
+    if closed.empty:
+        st.info("Servono partite concluse per cercare strategie.")
     else:
-        best = result.iloc[0]
-        st.success(
-            f'Combinazione migliore attuale: {best["Combinazione"]}\n\n'
-            f'Profitto € {best["Profitto €"]:.2f} • ROI {best["ROI %"]:.2f}% • '
-            f'Partite {int(best["Partite"])} • Affidabilità {best["Affidabilità %"]:.1f}%'
+        settings1, settings2, settings3 = st.columns(3)
+
+        min_sample = settings1.number_input(
+            "Campione minimo",
+            min_value=1,
+            max_value=max(1, len(closed)),
+            value=min(3, max(1, len(closed))),
+            step=1,
         )
-        st.dataframe(result, hide_index=True, use_container_width=True)
+
+        max_filters = settings2.selectbox(
+            "Numero massimo filtri",
+            [1, 2, 3],
+            index=1,
+        )
+
+        top_n = settings3.selectbox(
+            "Quante strategie mostrare",
+            [20, 50, 100],
+            index=1,
+        )
+
+        st.warning(
+            "Con pochi dati i risultati sono esplorativi. "
+            "Aumenta il campione minimo quando il database cresce."
+        )
+
+        if st.button(
+            "🔍 Cerca migliori strategie",
+            type="primary",
+            use_container_width=True,
+        ):
+            with st.spinner("Sto provando tutte le combinazioni possibili..."):
+                ranking, selections = automatic_strategy_search(
+                    closed,
+                    min_sample=int(min_sample),
+                    max_filters=int(max_filters),
+                    top_n=int(top_n),
+                )
+                st.session_state["strategy_ranking"] = ranking
+                st.session_state["strategy_selections"] = selections
+
+        ranking = st.session_state.get("strategy_ranking")
+        selections = st.session_state.get("strategy_selections", {})
+
+        if isinstance(ranking, pd.DataFrame) and not ranking.empty:
+            st.markdown("### Classifica strategie")
+
+            st.dataframe(
+                ranking.drop(columns=["ID"]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            strategy_map = {
+                f'{row["Strategia"]} | '
+                f'ROI {row["ROI %"]:.2f}% | '
+                f'Profitto € {row["Profitto €"]:.2f} | '
+                f'{int(row["Partite"])} partite': row["ID"]
+                for _, row in ranking.iterrows()
+            }
+
+            selected_label = st.selectbox(
+                "Apri il dettaglio di una strategia",
+                list(strategy_map.keys()),
+            )
+            strategy_id = strategy_map[selected_label]
+            selected_indices = selections.get(strategy_id, [])
+            selected_df = closed.loc[
+                closed.index.intersection(selected_indices)
+            ].copy()
+
+            if not selected_df.empty:
+                selected_stats = summary(selected_df)
+
+                st.markdown("### Dettaglio strategia")
+                x1, x2, x3, x4 = st.columns(4)
+                x1.metric("Partite", selected_stats["closed"])
+                x2.metric("🟢 Vinte", selected_stats["wins"])
+                x3.metric("🔴 Perse", selected_stats["losses"])
+                x4.metric("Win rate", f'{selected_stats["win_rate"]:.2f}%')
+
+                y1, y2, y3, y4 = st.columns(4)
+                y1.metric("Puntato", f'€ {selected_stats["staked"]:.2f}')
+                y2.metric("Profitto", f'€ {selected_stats["profit"]:.2f}')
+                y3.metric("ROI", f'{selected_stats["roi"]:.2f}%')
+                y4.metric("Quota media", f'{selected_stats["avg_odds"]:.2f}')
+
+                detail = selected_df.copy()
+                detail["Esito"] = detail["outcome"].map(
+                    {"V": "🟢 V", "P": "🔴 P"}
+                )
+                detail["Quota"] = pd.to_numeric(
+                    detail["current_odds"], errors="coerce"
+                ).round(2)
+                detail["Profitto €"] = pd.to_numeric(
+                    detail["profit"], errors="coerce"
+                ).round(2)
+
+                shown = detail[[
+                    "date", "time", "league", "match_name",
+                    "Quota", "allibramento_color", "mtr",
+                    "scl", "cal", "Esito", "final_score",
+                    "Profitto €"
+                ]].rename(columns={
+                    "date": "Data",
+                    "time": "Ora",
+                    "league": "Campionato",
+                    "match_name": "Partita",
+                    "allibramento_color": "ALLB",
+                    "mtr": "MTR",
+                    "scl": "SCL",
+                    "cal": "CAL",
+                    "final_score": "Risultato",
+                })
+
+                st.dataframe(
+                    shown.sort_values(
+                        ["Data", "Ora"],
+                        ascending=[False, False],
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                curve = detail.sort_values(
+                    ["date", "time", "id"]
+                ).copy()
+                curve["Profitto cumulato"] = pd.to_numeric(
+                    curve["profit"], errors="coerce"
+                ).fillna(0).cumsum()
+                curve["Progressivo"] = range(1, len(curve) + 1)
+
+                st.markdown("### Andamento del profitto")
+                st.line_chart(
+                    curve.set_index("Progressivo")[
+                        "Profitto cumulato"
+                    ]
+                )
+        elif ranking is not None:
+            st.info(
+                "Nessuna strategia supera il campione minimo scelto. "
+                "Abbassa temporaneamente il campione minimo."
+            )
 
 elif page == "📥 Importa/Esporta":
     st.subheader("📥 Importa / Esporta")
