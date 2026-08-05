@@ -675,11 +675,39 @@ elif page == "🏠 Home":
     c3.info("🥇 Cerca i filtri e le combinazioni migliori")
     df = get_matches()
     s = summary(df)
+
     metrics = st.columns(4)
-    metrics[0].metric("Partite", s["total"])
-    metrics[1].metric("Concluse", s["closed"])
-    metrics[2].metric("Profitto", f'€ {s["profit"]:.2f}')
-    metrics[3].metric("ROI", f'{s["roi"]:.2f}%')
+    metrics[0].metric("🟢 Vinte", s["wins"])
+    metrics[1].metric("🔴 Perse", s["losses"])
+    metrics[2].metric("💰 Profitto", f'€ {s["profit"]:.2f}')
+    metrics[3].metric("📈 ROI", f'{s["roi"]:.2f}%')
+
+    st.markdown("### Ultime partite")
+    if df.empty:
+        st.info("Nessuna partita salvata.")
+    else:
+        show = df.copy()
+        show["Esito"] = show["outcome"].map({"V": "🟢 V", "P": "🔴 P"}).fillna("⏳ In attesa")
+        show["Risultato"] = show["final_score"].fillna("")
+        show["Quota"] = pd.to_numeric(show["current_odds"], errors="coerce").round(2)
+        show["Profitto €"] = pd.to_numeric(show["profit"], errors="coerce")
+        show = show.sort_values(["date", "time", "id"], ascending=[False, False, False])
+
+        display_columns = [
+            "date", "time", "match_name", "Quota",
+            "Esito", "Risultato", "Profitto €"
+        ]
+        show = show[display_columns].rename(columns={
+            "date": "Data",
+            "time": "Ora",
+            "match_name": "Partita",
+        })
+
+        st.dataframe(
+            show.head(20),
+            use_container_width=True,
+            hide_index=True,
+        )
 
 elif page == "➕ Nuova partita":
     st.subheader("➕ Nuova partita")
@@ -728,7 +756,21 @@ elif page == "📋 Database":
                 show["league"].astype(str).str.contains(search, case=False, na=False)
             )
             show = show[mask]
-        st.dataframe(show, use_container_width=True, hide_index=True)
+        show["Esito"] = show["outcome"].map({"V": "🟢 V", "P": "🔴 P"}).fillna("⏳ In attesa")
+        show["Risultato"] = show["final_score"].fillna("")
+        show["Quota"] = pd.to_numeric(show["current_odds"], errors="coerce").round(2)
+        show["Profitto €"] = pd.to_numeric(show["profit"], errors="coerce")
+
+        preferred = [
+            "id", "date", "time", "league", "match_name",
+            "Quota", "Esito", "Risultato", "Profitto €"
+        ]
+        remaining = [col for col in show.columns if col not in preferred]
+        st.dataframe(
+            show[preferred + remaining],
+            use_container_width=True,
+            hide_index=True,
+        )
 
 elif page == "🏆 Aggiorna risultato":
     st.subheader("🏆 Aggiorna risultato")
@@ -779,13 +821,16 @@ elif page == "📊 Dashboard":
     df = get_matches()
     s = summary(df)
     row1 = st.columns(4)
-    row1[0].metric("Partite",s["total"]); row1[1].metric("Concluse",s["closed"])
-    row1[2].metric("Vinte",s["wins"]); row1[3].metric("Perse",s["losses"])
+    row1[0].metric("Partite", s["total"])
+    row1[1].metric("Concluse", s["closed"])
+    row1[2].metric("🟢 Vinte", s["wins"])
+    row1[3].metric("🔴 Perse", s["losses"])
+
     row2 = st.columns(4)
-    row2[0].metric("Win rate",f'{s["win_rate"]:.2f}%')
-    row2[1].metric("Profitto",f'€ {s["profit"]:.2f}')
-    row2[2].metric("ROI",f'{s["roi"]:.2f}%')
-    row2[3].metric("Quota media",f'{s["avg_odds"]:.2f}')
+    row2[0].metric("Win rate", f'{s["win_rate"]:.2f}%')
+    row2[1].metric("💰 Profitto", f'€ {s["profit"]:.2f}')
+    row2[2].metric("📈 ROI", f'{s["roi"]:.2f}%')
+    row2[3].metric("Quota media", f'{s["avg_odds"]:.2f}')
     closed = df[df["outcome"].isin(["V","P"])].copy() if not df.empty else df
     if not closed.empty:
         closed["profitto_cumulato"] = pd.to_numeric(closed["profit"], errors="coerce").fillna(0).cumsum()
