@@ -113,6 +113,72 @@ def github_headers():
     }
 
 
+
+def trigger_named_workflow(workflow_file):
+    owner = secret("GITHUB_OWNER")
+    repo = secret("GITHUB_REPO")
+    url = (
+        f"https://api.github.com/repos/{owner}/{repo}/actions/"
+        f"workflows/{workflow_file}/dispatches"
+    )
+    response = requests.post(
+        url,
+        headers=github_headers(),
+        json={"ref": "main"},
+        timeout=30,
+    )
+    if response.status_code != 204:
+        try:
+            detail = response.json()
+        except Exception:
+            detail = response.text
+        raise RuntimeError(
+            f"GitHub ha risposto con errore {response.status_code}: {detail}"
+        )
+
+
+def latest_named_workflow_run(workflow_file):
+    owner = secret("GITHUB_OWNER")
+    repo = secret("GITHUB_REPO")
+    url = (
+        f"https://api.github.com/repos/{owner}/{repo}/actions/"
+        f"workflows/{workflow_file}/runs"
+    )
+    response = requests.get(
+        url,
+        headers=github_headers(),
+        params={"branch": "main", "per_page": 1},
+        timeout=30,
+    )
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Impossibile leggere lo stato del workflow: {response.status_code}"
+        )
+    runs = response.json().get("workflow_runs", [])
+    return runs[0] if runs else None
+
+
+def run_and_wait_named_workflow(workflow_file, timeout_seconds=150):
+    previous = latest_named_workflow_run(workflow_file)
+    previous_id = previous.get("id") if previous else None
+
+    trigger_named_workflow(workflow_file)
+    start = time.time()
+
+    while time.time() - start < timeout_seconds:
+        run = latest_named_workflow_run(workflow_file)
+        if run and run.get("id") != previous_id:
+            if run.get("status") == "completed":
+                return {
+                    "ok": run.get("conclusion") == "success",
+                    "conclusion": run.get("conclusion"),
+                    "url": run.get("html_url", ""),
+                }
+        time.sleep(5)
+
+    return {"ok": False, "conclusion": "timeout", "url": ""}
+
+
 def trigger_collector_workflow():
     owner = secret("GITHUB_OWNER")
     repo = secret("GITHUB_REPO")
@@ -543,49 +609,66 @@ elif page == "🏠 Home":
 
     st.subheader("Gestione completa dal telefono")
 
-    st.markdown("### 🔄 Aggiornamento automatico")
-    update_col, refresh_col = st.columns([2, 1])
+    st.markdown("### 🤖 Aggiornamento automatico")
+    partite_col, risultati_col, refresh_col = st.columns([2, 2, 1])
 
-    with update_col:
+    with partite_col:
         if not github_configured():
-            st.warning(
-                "Configura GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO e "
-                "GITHUB_WORKFLOW nei Secrets di Streamlit."
-            )
+            st.warning("Configura i Secrets GitHub.")
         elif st.button(
-            "🔄 Aggiorna partite da Stats4Bets",
+            "🔄 Aggiorna partite",
             type="primary",
             use_container_width=True,
         ):
             try:
                 trigger_collector_workflow()
-                st.success("Workflow avviato. Attendo il completamento...")
-                with st.spinner("Aggiornamento in corso: attendi circa 1-2 minuti..."):
+                st.success("Raccolta partite avviata.")
+                with st.spinner("Attendi circa 1-2 minuti..."):
                     result = wait_for_collector()
 
                 if result["ok"]:
-                    st.success("✅ Aggiornamento completato.")
+                    st.success("✅ Partite aggiornate.")
                     time.sleep(1)
                     st.rerun()
                 elif result["conclusion"] == "timeout":
-                    st.warning(
-                        "Il workflow è partito ma non ha terminato entro il tempo di attesa. "
-                        "Premi «Ricarica dati» tra un minuto."
-                    )
+                    st.warning("Workflow ancora in corso. Ricarica tra un minuto.")
                 else:
-                    st.error(
-                        f'Workflow terminato con esito: {result["conclusion"]}.'
-                    )
-                    if result.get("url"):
-                        st.link_button("Apri il dettaglio su GitHub", result["url"])
+                    st.error(f'Errore workflow: {result["conclusion"]}')
             except Exception as exc:
-                st.error(f"Non sono riuscito ad avviare l'aggiornamento: {exc}")
+                st.error(f"Errore aggiornamento partite: {exc}")
+
+    with risultati_col:
+        if not github_configured():
+            st.warning("Configura i Secrets GitHub.")
+        elif st.button(
+            "🏁 Aggiorna risultati e profitti",
+            use_container_width=True,
+        ):
+            try:
+                with st.spinner("Cerco risultati e calcolo profitti..."):
+                    result = run_and_wait_named_workflow("results-update.yml")
+
+                if result["ok"]:
+                    st.success("✅ Risultati e profitti aggiornati.")
+                    time.sleep(1)
+                    st.rerun()
+                elif result["conclusion"] == "timeout":
+                    st.warning("Workflow ancora in corso. Ricarica tra un minuto.")
+                else:
+                    st.error(f'Errore workflow: {result["conclusion"]}')
+                    if result.get("url"):
+                        st.link_button("Apri dettaglio GitHub", result["url"])
+            except Exception as exc:
+                st.error(f"Errore aggiornamento risultati: {exc}")
 
     with refresh_col:
-        if st.button("↻ Ricarica dati", use_container_width=True):
+        if st.button("↻ Ricarica", use_container_width=True):
             st.rerun()
 
-    st.info("Premi «Aggiorna partite da Stats4Bets» per importare le nuove Ottimo 1.")
+    st.caption(
+        "La quota current_odds viene congelata al primo inserimento. "
+        "Puntata fissa: 20 €."
+    )
     c1,c2,c3 = st.columns(3)
     c1.info("➕ Carica screenshot/PDF e salva la partita")
     c2.info("🏆 Aggiorna risultato, ritorno e profitto")
