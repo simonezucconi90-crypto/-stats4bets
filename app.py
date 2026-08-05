@@ -497,18 +497,11 @@ def combo_table(df, min_sample=3, max_filters=3):
     )
 
 
-def apply_strategy_filters(df, filters, methods, min_odds, max_odds, min_prob, max_prob):
+def apply_strategy_filters(df, filters, min_odds, max_odds, min_prob, max_prob):
     filtered = df.copy()
     for column, values in filters.items():
         if values:
             filtered = filtered[filtered[column].astype(str).isin(values)]
-
-    for method in methods:
-        column = METHOD_COLUMNS[method]
-        filtered = filtered[
-            pd.to_numeric(filtered[column], errors="coerce").fillna(0) == 1
-        ]
-
     odds = pd.to_numeric(filtered["current_odds"], errors="coerce")
     filtered = filtered[(odds >= min_odds) & (odds <= max_odds)]
 
@@ -556,15 +549,6 @@ def automatic_strategy_search(df, min_sample=3, max_filters=3, top_n=100):
                     "kind": "equals",
                     "value": value,
                 }
-
-    for label, column in METHOD_COLUMNS.items():
-        if column in closed.columns:
-            dimensions[f"Metodo={label}"] = {
-                "column": column,
-                "kind": "equals_numeric",
-                "value": 1,
-            }
-
     odds = pd.to_numeric(closed["current_odds"], errors="coerce")
     odds_bins = [
         (1.20, 1.39),
@@ -1109,7 +1093,6 @@ elif page == "🧪 Laboratorio Strategie":
 
         with tab3:
             leagues = st.multiselect("Campionati", opts("league"))
-            methods = st.multiselect("Metodi associati presenti", list(METHOD_COLUMNS))
 
         filters = {
             "allibramento_color": allb,
@@ -1125,7 +1108,7 @@ elif page == "🧪 Laboratorio Strategie":
         }
 
         filtered = apply_strategy_filters(
-            closed, filters, methods, min_odds, max_odds, min_prob, max_prob
+            closed, filters, min_odds, max_odds, min_prob, max_prob
         )
         s = summary(filtered)
 
@@ -1177,7 +1160,7 @@ elif page == "🧪 Laboratorio Strategie":
 elif page == "🧠 Trova metodo migliore":
     st.subheader("🧠 Trova automaticamente le migliori strategie")
     st.caption(
-        "Il motore prova combinazioni di indicatori, metodi, "
+        "Il motore prova combinazioni di indicatori, "
         "fasce quota e soglie di probabilità."
     )
 
