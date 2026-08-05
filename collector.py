@@ -301,10 +301,25 @@ def save_to_supabase(records):
 
         if existing:
             internal_id = existing[0]["id"]
+
+            # La quota viene congelata al primo inserimento.
+            # Gli aggiornamenti successivi possono aggiornare statistiche e indicatori,
+            # ma non current_odds, played_odds o stake.
+            payload.pop("current_odds", None)
+            payload.pop("played_odds", None)
+            payload.pop("stake", None)
+
             client.table("matches").update(payload).eq("id", internal_id).execute()
             updated += 1
         else:
             payload["id"] = next_internal_id(client)
+
+            # Quota bloccata al momento in cui l'utente genera/importa la partita.
+            frozen_odds = float(payload.get("current_odds") or 0)
+            payload["current_odds"] = frozen_odds
+            payload["played_odds"] = frozen_odds
+            payload["stake"] = 20.0
+
             client.table("matches").insert(payload).execute()
             inserted += 1
 
