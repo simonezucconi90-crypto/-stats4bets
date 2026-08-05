@@ -496,6 +496,27 @@ def combo_table(df, min_sample=3, max_filters=3):
         ascending=[False, False, False, False]
     )
 
+
+def apply_strategy_filters(df, filters, methods, min_odds, max_odds, min_prob, max_prob):
+    filtered = df.copy()
+    for column, values in filters.items():
+        if values:
+            filtered = filtered[filtered[column].astype(str).isin(values)]
+
+    for method in methods:
+        column = METHOD_COLUMNS[method]
+        filtered = filtered[
+            pd.to_numeric(filtered[column], errors="coerce").fillna(0) == 1
+        ]
+
+    odds = pd.to_numeric(filtered["current_odds"], errors="coerce")
+    filtered = filtered[(odds >= min_odds) & (odds <= max_odds)]
+
+    probs = pd.to_numeric(filtered["prob_1"], errors="coerce")
+    filtered = filtered[(probs >= min_prob) & (probs <= max_prob)]
+    return filtered
+
+
 def editor_form(data, prefix):
     left, right = st.columns(2)
     with left:
@@ -538,7 +559,8 @@ st.caption(f"Archivio e analisi partite • Archivio: {storage_label()}")
 page = st.sidebar.radio("Menu", [
     "🏠 Home","⚡ Inserimento rapido","➕ Nuova partita","📋 Database","🏆 Aggiorna risultato",
     "✏️ Modifica/Elimina","📊 Dashboard","🔎 Analisi filtri",
-    "🧠 Trova metodo migliore","📥 Importa/Esporta","⚙️ Configurazione"
+    "🧪 Laboratorio Strategie","🧠 Trova metodo migliore",
+    "📥 Importa/Esporta","⚙️ Configurazione"
 ])
 
 if page == "⚡ Inserimento rapido":
@@ -860,6 +882,119 @@ elif page == "🔎 Analisi filtri":
             "Profitto €":round(s["profit"],2),"ROI %":round(s["roi"],2)
         }]), hide_index=True, use_container_width=True)
         st.dataframe(filtered, hide_index=True, use_container_width=True)
+
+
+elif page == "🧪 Laboratorio Strategie":
+    st.subheader("🧪 Laboratorio Strategie")
+    st.caption("Combina più condizioni e verifica profitto, ROI e partite selezionate.")
+
+    df = get_matches()
+    closed = df[df["outcome"].isin(["V", "P"])].copy() if not df.empty else df
+
+    if closed.empty:
+        st.info("Servono partite concluse per analizzare una strategia.")
+    else:
+        def opts(column):
+            values = closed[column].dropna().astype(str).str.strip()
+            return sorted(v for v in values.unique() if v and v.lower() not in {"nan", "none"})
+
+        st.markdown("### Filtri")
+        tab1, tab2, tab3 = st.tabs(["Indicatori", "Quota e probabilità", "Contesto"])
+
+        with tab1:
+            c1, c2, c3 = st.columns(3)
+            allb = c1.multiselect("Allibramento", opts("allibramento_color"))
+            mtr = c2.multiselect("MTR", opts("mtr"))
+            scl = c3.multiselect("SCL", opts("scl"))
+
+            c4, c5, c6 = st.columns(3)
+            cal = c4.multiselect("CAL", opts("cal"))
+            caff = c5.multiselect("C. AFF.", opts("c_aff"))
+            flbk = c6.multiselect("FLBK", opts("flbk"))
+
+            c7, c8, c9 = st.columns(3)
+            cfb = c7.multiselect("C. FB.", opts("c_fb"))
+            qra = c8.multiselect("QRA/QA", opts("qra_qa"))
+            qi = c9.multiselect("QI/QA", opts("qi_qa"))
+
+        with tab2:
+            odds = pd.to_numeric(closed["current_odds"], errors="coerce").dropna()
+            probs = pd.to_numeric(closed["prob_1"], errors="coerce").dropna()
+
+            o1, o2 = st.columns(2)
+            min_odds = o1.number_input("Quota minima", value=float(odds.min()) if not odds.empty else 1.0, step=0.01)
+            max_odds = o2.number_input("Quota massima", value=float(odds.max()) if not odds.empty else 5.0, step=0.01)
+
+            p1, p2 = st.columns(2)
+            min_prob = p1.number_input("Probabilità 1 minima", value=float(probs.min()) if not probs.empty else 0.0, step=0.5)
+            max_prob = p2.number_input("Probabilità 1 massima", value=float(probs.max()) if not probs.empty else 100.0, step=0.5)
+
+        with tab3:
+            leagues = st.multiselect("Campionati", opts("league"))
+            methods = st.multiselect("Metodi associati presenti", list(METHOD_COLUMNS))
+
+        filters = {
+            "allibramento_color": allb,
+            "mtr": mtr,
+            "scl": scl,
+            "cal": cal,
+            "c_aff": caff,
+            "flbk": flbk,
+            "c_fb": cfb,
+            "qra_qa": qra,
+            "qi_qa": qi,
+            "league": leagues,
+        }
+
+        filtered = apply_strategy_filters(
+            closed, filters, methods, min_odds, max_odds, min_prob, max_prob
+        )
+        s = summary(filtered)
+
+        st.markdown("### Risultato")
+        a, b, c, d = st.columns(4)
+        a.metric("Partite", s["closed"])
+        b.metric("🟢 Vinte", s["wins"])
+        c.metric("🔴 Perse", s["losses"])
+        d.metric("Win rate", f'{s["win_rate"]:.2f}%')
+
+        e, f, g, h = st.columns(4)
+        e.metric("Puntato", f'€ {s["staked"]:.2f}')
+        f.metric("Profitto", f'€ {s["profit"]:.2f}')
+        g.metric("ROI", f'{s["roi"]:.2f}%')
+        h.metric("Quota media", f'{s["avg_odds"]:.2f}')
+
+        if filtered.empty:
+            st.warning("Nessuna partita rispetta tutti i filtri selezionati.")
+        else:
+            detail = filtered.copy()
+            detail["Esito"] = detail["outcome"].map({"V": "🟢 V", "P": "🔴 P"})
+            detail["Quota"] = pd.to_numeric(detail["current_odds"], errors="coerce").round(2)
+            detail["Prob. 1"] = pd.to_numeric(detail["prob_1"], errors="coerce").round(1)
+            detail["Profitto €"] = pd.to_numeric(detail["profit"], errors="coerce").round(2)
+
+            shown = detail[[
+                "date", "time", "league", "match_name", "Quota", "Prob. 1",
+                "allibramento_color", "mtr", "scl", "cal", "Esito",
+                "final_score", "Profitto €"
+            ]].rename(columns={
+                "date": "Data", "time": "Ora", "league": "Campionato",
+                "match_name": "Partita", "allibramento_color": "ALLB",
+                "mtr": "MTR", "scl": "SCL", "cal": "CAL",
+                "final_score": "Risultato"
+            })
+
+            st.markdown("### Partite selezionate")
+            st.dataframe(shown, use_container_width=True, hide_index=True)
+
+            curve = detail.sort_values(["date", "time", "id"]).copy()
+            curve["Profitto cumulato"] = pd.to_numeric(
+                curve["profit"], errors="coerce"
+            ).fillna(0).cumsum()
+            curve["Progressivo"] = range(1, len(curve) + 1)
+            st.markdown("### Andamento del profitto")
+            st.line_chart(curve.set_index("Progressivo")["Profitto cumulato"])
+
 
 elif page == "🧠 Trova metodo migliore":
     st.subheader("🧠 Trova metodo migliore")
