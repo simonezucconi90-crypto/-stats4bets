@@ -6,15 +6,21 @@ name: Stats4Bets Aggiorna Risultati e Profitti
 permissions:
   contents: read
 
+concurrency:
+  group: stats4bets-results-update
+  cancel-in-progress: true
+
 jobs:
   update-results:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Scarica repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Configura Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
