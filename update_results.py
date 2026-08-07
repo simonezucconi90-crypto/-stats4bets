@@ -19,6 +19,7 @@ TEAM_ALIASES = {
     "wolverhampton": "wolverhampton wanderers",
     "wolverhampton wanderers": "wolverhampton wanderers",
     "shenzhen xinpengcheng": "shenzhen peng city",
+    "sichuan jiuniu": "shenzhen peng city",
     "shenzhen peng city": "shenzhen peng city",
     "olympiacos": "olympiakos piraeus",
     "olympiakos": "olympiakos piraeus",
