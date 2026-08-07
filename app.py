@@ -1098,8 +1098,50 @@ elif page == "📊 Dashboard":
     row2[3].metric("Quota media", f'{s["avg_odds"]:.2f}')
     closed = df[df["outcome"].isin(["V","P"])].copy() if not df.empty else df
     if not closed.empty:
-        closed["profitto_cumulato"] = pd.to_numeric(closed["profit"], errors="coerce").fillna(0).cumsum()
-        st.line_chart(closed.set_index("id")["profitto_cumulato"])
+        # Il profitto cumulato deve seguire l'ordine reale delle giocate.
+        # Prima ordiniamo cronologicamente, poi facciamo la somma cumulata.
+        closed["_date_sort"] = pd.to_datetime(
+            closed["date"],
+            errors="coerce"
+        )
+        closed["_time_sort"] = closed["time"].fillna("").astype(str)
+        closed["_id_sort"] = closed["id"].astype(str)
+
+        closed = closed.sort_values(
+            ["_date_sort", "_time_sort", "_id_sort"],
+            ascending=[True, True, True],
+            na_position="last",
+        ).copy()
+
+        closed["profit"] = pd.to_numeric(
+            closed["profit"],
+            errors="coerce"
+        ).fillna(0.0)
+
+        closed["profitto_cumulato"] = closed["profit"].cumsum().round(2)
+
+        # Etichetta progressiva leggibile e stabile.
+        closed["Giocata"] = range(1, len(closed) + 1)
+
+        st.markdown("### 📈 Andamento profitto cumulato")
+        st.line_chart(
+            closed.set_index("Giocata")["profitto_cumulato"]
+        )
+
+        ultimo_profitto = float(closed["profitto_cumulato"].iloc[-1])
+        profitto_dashboard = round(float(s["profit"]), 2)
+
+        if round(ultimo_profitto, 2) != profitto_dashboard:
+            st.error(
+                "⚠️ Controllo grafico: il profitto finale del grafico "
+                f"({ultimo_profitto:.2f} €) non coincide con quello della "
+                f"Dashboard ({profitto_dashboard:.2f} €)."
+            )
+        else:
+            st.caption(
+                f"✅ Ultimo punto del grafico = profitto totale: "
+                f"{profitto_dashboard:.2f} €"
+            )
 
 elif page == "🔎 Analisi filtri":
     st.subheader("🔎 Analisi filtri")
