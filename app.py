@@ -585,6 +585,7 @@ def automatic_strategy_search(
 
     odds = pd.to_numeric(closed["current_odds"], errors="coerce")
     odds_bins = [
+        # Fasce strette
         (1.20, 1.39),
         (1.40, 1.49),
         (1.50, 1.59),
@@ -595,6 +596,24 @@ def automatic_strategy_search(
         (2.25, 2.49),
         (2.50, 2.99),
         (3.00, 99.00),
+
+        # Fasce più ampie e sovrapposte
+        (1.20, 1.50),
+        (1.20, 1.70),
+        (1.20, 2.00),
+        (1.30, 1.60),
+        (1.30, 1.80),
+        (1.30, 2.00),
+        (1.40, 1.60),
+        (1.40, 1.80),
+        (1.40, 2.00),
+        (1.50, 1.80),
+        (1.50, 2.00),
+        (1.50, 2.20),
+        (1.60, 2.00),
+        (1.60, 2.20),
+        (1.70, 2.20),
+        (1.80, 2.50),
     ]
     for low, high in odds_bins:
         if ((odds >= low) & (odds <= high)).any():
@@ -728,8 +747,14 @@ def automatic_strategy_search(
                 "Perse": total_stats["losses"],
                 "Win rate %": round(total_stats["win_rate"], 2),
                 "Quota media": round(total_stats["avg_odds"], 2),
+                "Puntato €": round(total_stats["staked"], 2),
                 "Profitto €": round(total_stats["profit"], 2),
                 "ROI %": round(total_stats["roi"], 2),
+                "Profitto / 100€": round(
+                    (total_stats["profit"] / total_stats["staked"] * 100)
+                    if total_stats["staked"] else 0,
+                    2,
+                ),
                 "Max perdite consecutive": total_stats["max_losing_streak"],
                 "ROI ricerca %": round(train_stats["roi"], 2),
                 "ROI verifica %": round(test_stats["roi"], 2) if use_validation else None,
@@ -1281,7 +1306,7 @@ elif page == "🧪 Laboratorio Strategie":
 
 
 elif page == "🧠 Trova metodo migliore":
-    st.subheader("🧠 Motore Strategie V2")
+    st.subheader("🧠 Motore Strategie V2.1")
     st.caption(
         "Cerca automaticamente le combinazioni migliori e verifica "
         "se reggono anche sulla parte più recente dello storico."
@@ -1365,6 +1390,11 @@ elif page == "🧠 Trova metodo migliore":
             st.caption(
                 "✅ = ROI positivo sia nella parte di ricerca sia nella parte "
                 "più recente usata per la verifica. ⚠️ = da considerare esplorativa."
+            )
+            st.caption(
+                "Profitto / 100€ mostra quanto rende la strategia ogni 100 € "
+                "complessivamente puntati: è utile per confrontare strategie "
+                "con profitti simili ma capitale impiegato diverso."
             )
 
             st.markdown("### 🔎 Apri una strategia")
@@ -1474,8 +1504,14 @@ elif page == "🧠 Trova metodo migliore":
                         "Vinte": ss["wins"],
                         "Perse": ss["losses"],
                         "Win rate %": round(ss["win_rate"], 2),
+                        "Puntato €": round(ss["staked"], 2),
                         "Profitto €": round(ss["profit"], 2),
                         "ROI %": round(ss["roi"], 2),
+                        "Profitto / 100€": round(
+                            (ss["profit"] / ss["staked"] * 100)
+                            if ss["staked"] else 0,
+                            2,
+                        ),
                         "Quota media": round(ss["avg_odds"], 2),
                         "Max perdite consecutive": ss["max_losing_streak"],
                     })
