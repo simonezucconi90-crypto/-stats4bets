@@ -536,6 +536,60 @@ def strategy_statistics(df):
     }
 
 
+
+STRATEGY_ODDS_RANGES = [
+    (1.20, 1.39), (1.40, 1.49), (1.50, 1.59), (1.60, 1.69),
+    (1.70, 1.79), (1.80, 1.99), (2.00, 2.24), (2.25, 2.49),
+    (2.50, 2.99), (3.00, 99.00),
+
+    # Range più ampi e sovrapposti
+    (1.20, 1.50), (1.20, 1.70), (1.20, 2.00),
+    (1.30, 1.60), (1.30, 1.80), (1.30, 2.00),
+    (1.40, 1.60), (1.40, 1.80), (1.40, 2.00),
+    (1.50, 1.80), (1.50, 2.00), (1.50, 2.20),
+    (1.60, 2.00), (1.60, 2.20), (1.70, 2.20),
+    (1.80, 2.50),
+]
+
+
+def odds_range_analysis(df):
+    rows = []
+    odds = pd.to_numeric(df["current_odds"], errors="coerce")
+
+    for low, high in STRATEGY_ODDS_RANGES:
+        subset = df[(odds >= low) & (odds <= high)].copy()
+        if subset.empty:
+            continue
+
+        s = strategy_statistics(subset)
+        label = f"{low:.2f}+" if high >= 99 else f"{low:.2f}–{high:.2f}"
+
+        rows.append({
+            "Range quota": label,
+            "Partite": s["closed"],
+            "Vinte": s["wins"],
+            "Perse": s["losses"],
+            "Win rate %": round(s["win_rate"], 2),
+            "Quota media": round(s["avg_odds"], 2),
+            "Puntato €": round(s["staked"], 2),
+            "Profitto €": round(s["profit"], 2),
+            "ROI %": round(s["roi"], 2),
+            "Profitto / 100€": round(
+                (s["profit"] / s["staked"] * 100) if s["staked"] else 0,
+                2,
+            ),
+            "Max perdite consecutive": s["max_losing_streak"],
+        })
+
+    if not rows:
+        return pd.DataFrame()
+
+    return pd.DataFrame(rows).sort_values(
+        ["Profitto €", "ROI %", "Partite"],
+        ascending=[False, False, False],
+    ).reset_index(drop=True)
+
+
 def automatic_strategy_search(
     df,
     min_sample=10,
@@ -584,37 +638,7 @@ def automatic_strategy_search(
                 }
 
     odds = pd.to_numeric(closed["current_odds"], errors="coerce")
-    odds_bins = [
-        # Fasce strette
-        (1.20, 1.39),
-        (1.40, 1.49),
-        (1.50, 1.59),
-        (1.60, 1.69),
-        (1.70, 1.79),
-        (1.80, 1.99),
-        (2.00, 2.24),
-        (2.25, 2.49),
-        (2.50, 2.99),
-        (3.00, 99.00),
-
-        # Fasce più ampie e sovrapposte
-        (1.20, 1.50),
-        (1.20, 1.70),
-        (1.20, 2.00),
-        (1.30, 1.60),
-        (1.30, 1.80),
-        (1.30, 2.00),
-        (1.40, 1.60),
-        (1.40, 1.80),
-        (1.40, 2.00),
-        (1.50, 1.80),
-        (1.50, 2.00),
-        (1.50, 2.20),
-        (1.60, 2.00),
-        (1.60, 2.20),
-        (1.70, 2.20),
-        (1.80, 2.50),
-    ]
+    odds_bins = STRATEGY_ODDS_RANGES
     for low, high in odds_bins:
         if ((odds >= low) & (odds <= high)).any():
             dimensions[f"Quota {low:.2f}-{high:.2f}"] = {
@@ -1306,7 +1330,7 @@ elif page == "🧪 Laboratorio Strategie":
 
 
 elif page == "🧠 Trova metodo migliore":
-    st.subheader("🧠 Motore Strategie V2.1")
+    st.subheader("🧠 Motore Strategie V2.2")
     st.caption(
         "Cerca automaticamente le combinazioni migliori e verifica "
         "se reggono anche sulla parte più recente dello storico."
@@ -1356,6 +1380,28 @@ elif page == "🧠 Trova metodo migliore":
             st.info(
                 "Il motore usa la parte iniziale dello storico per individuare "
                 "la strategia e la parte più recente per verificarla."
+            )
+
+        st.markdown("### 📊 Analisi range quote")
+        st.caption(
+            "Qui vedi chiaramente come rendono le diverse fasce di quota da sole. "
+            "Gli stessi range vengono anche combinati automaticamente con gli altri filtri."
+        )
+
+        odds_table = odds_range_analysis(closed)
+        if not odds_table.empty:
+            st.dataframe(
+                odds_table,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        with st.expander("Vedi tutti i range quota provati dal motore"):
+            st.write(
+                ", ".join(
+                    f"{low:.2f}+" if high >= 99 else f"{low:.2f}–{high:.2f}"
+                    for low, high in STRATEGY_ODDS_RANGES
+                )
             )
 
         if st.button(
