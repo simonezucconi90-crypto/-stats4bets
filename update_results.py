@@ -28,6 +28,9 @@ TEAM_ALIASES = {
     "psg": "paris saint germain",
     "man utd": "manchester united",
     "man united": "manchester united",
+    "u catolica": "universidad catolica",
+    "universidad catolica": "universidad catolica",
+    "universidad catolica chile": "universidad catolica",
 }
 
 
@@ -47,6 +50,14 @@ def basic_normalize(value):
 
 def normalize_team_name(value):
     normalized = basic_normalize(value)
+
+    # Abbreviazioni comuni e conservative.
+    # Esempio: "U. Catolica" -> "Universidad Catolica".
+    if normalized.startswith("u "):
+        expanded = "universidad " + normalized[2:].strip()
+        if expanded in TEAM_ALIASES:
+            normalized = expanded
+
     return TEAM_ALIASES.get(normalized, normalized)
 
 
