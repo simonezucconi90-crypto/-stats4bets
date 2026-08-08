@@ -246,23 +246,6 @@ def wait_for_collector(timeout_seconds=150, poll_seconds=5):
 
     return {"ok": False, "conclusion": "timeout", "url": ""}
 
-
-def require_login():
-    password = secret("APP_PASSWORD")
-    if not password:
-        st.warning("Configura APP_PASSWORD nelle Secrets di Streamlit.")
-        st.stop()
-    if st.session_state.get("authenticated"):
-        return
-    st.title("🔐 Stats4Bets")
-    entered = st.text_input("Password dell'app", type="password")
-    if st.button("Entra", type="primary"):
-        if entered == password:
-            st.session_state["authenticated"] = True
-            st.rerun()
-        st.error("Password errata.")
-    st.stop()
-
 def use_supabase():
     return bool(secret("SUPABASE_URL") and secret("SUPABASE_KEY"))
 
@@ -842,8 +825,6 @@ def editor_form(data, prefix):
     for i,(label,col) in enumerate(METHOD_COLUMNS.items()):
         data[col] = 1 if cols[i%3].checkbox(label, value=bool(data.get(col,0)), key=f"{prefix}_{col}") else 0
     return data
-
-require_login()
 
 st.title("📊 Stats4Bets")
 st.caption(f"Archivio e analisi partite • Archivio: {storage_label()}")
