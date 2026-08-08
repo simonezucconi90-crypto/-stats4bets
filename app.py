@@ -246,6 +246,7 @@ def wait_for_collector(timeout_seconds=150, poll_seconds=5):
 
     return {"ok": False, "conclusion": "timeout", "url": ""}
 
+
 def use_supabase():
     return bool(secret("SUPABASE_URL") and secret("SUPABASE_KEY"))
 
@@ -573,6 +574,54 @@ def odds_range_analysis(df):
     ).reset_index(drop=True)
 
 
+
+def add_strategy_derived_columns(df):
+    out = df.copy()
+    current = pd.to_numeric(out["current_odds"], errors="coerce")
+    opening = pd.to_numeric(out["opening_odds"], errors="coerce")
+    fair = pd.to_numeric(out["fair_odds"], errors="coerce")
+    allb_value = pd.to_numeric(out["allibramento_value"], errors="coerce")
+    allb_avg = pd.to_numeric(out["allibramento_avg"], errors="coerce")
+
+    out["_odds_move_pct"] = ((current / opening) - 1.0) * 100.0
+    out.loc[(opening <= 0) | opening.isna() | current.isna(), "_odds_move_pct"] = pd.NA
+
+    out["_value_vs_fair_pct"] = ((current / fair) - 1.0) * 100.0
+    out.loc[(fair <= 0) | fair.isna() | current.isna(), "_value_vs_fair_pct"] = pd.NA
+
+    out["_allb_delta"] = allb_value - allb_avg
+    out.loc[allb_value.isna() | allb_avg.isna(), "_allb_delta"] = pd.NA
+    return out
+
+
+def stability_statistics(df):
+    if df.empty:
+        return {"positive_blocks":0,"total_blocks":0,"stability_pct":0.0,"worst_block_roi":0.0}
+
+    ordered = df.sort_values(["date", "time", "id"]).copy()
+    n = len(ordered)
+    if n < 6:
+        return {"positive_blocks":0,"total_blocks":0,"stability_pct":0.0,"worst_block_roi":0.0}
+
+    cuts = [0, n // 3, (2 * n) // 3, n]
+    rois = []
+    for i in range(3):
+        block = ordered.iloc[cuts[i]:cuts[i+1]]
+        if not block.empty:
+            rois.append(summary(block)["roi"])
+
+    if not rois:
+        return {"positive_blocks":0,"total_blocks":0,"stability_pct":0.0,"worst_block_roi":0.0}
+
+    positive = sum(1 for roi in rois if roi > 0)
+    return {
+        "positive_blocks": positive,
+        "total_blocks": len(rois),
+        "stability_pct": positive / len(rois) * 100.0,
+        "worst_block_roi": min(rois),
+    }
+
+
 def automatic_strategy_search(
     df,
     min_sample=10,
@@ -584,15 +633,20 @@ def automatic_strategy_search(
     if closed.empty:
         return pd.DataFrame(), {}
 
+    closed = add_strategy_derived_columns(closed)
     closed = closed.sort_values(["date", "time", "id"]).copy()
 
+    baseline_stats = strategy_statistics(closed)
+    baseline_roi = baseline_stats["roi"]
     dimensions = {}
 
     categorical = {
-        "ALLB": "allibramento_color",
+        "ALLB colore": "allibramento_color",
+        "ALLB indicatore": "allb",
         "MTR": "mtr",
         "SCL": "scl",
         "CAL": "cal",
+        "STATUS": "status",
         "C.AFF.": "c_aff",
         "FLBK": "flbk",
         "C.FB.": "c_fb",
@@ -604,55 +658,78 @@ def automatic_strategy_search(
     for label, column in categorical.items():
         if column not in closed.columns:
             continue
-        values = (
-            closed[column]
-            .dropna()
-            .astype(str)
-            .str.strip()
-            .unique()
-        )
+        values = closed[column].dropna().astype(str).str.strip().unique()
         for value in values:
             if value and value.lower() not in {"nan", "none"}:
                 dimensions[f"{label}={value}"] = {
-                    "family": column,
-                    "column": column,
-                    "kind": "equals",
-                    "value": value,
+                    "family": column, "column": column,
+                    "kind": "equals", "value": value,
                 }
 
     odds = pd.to_numeric(closed["current_odds"], errors="coerce")
-    odds_bins = STRATEGY_ODDS_RANGES
-    for low, high in odds_bins:
+    for low, high in STRATEGY_ODDS_RANGES:
         if ((odds >= low) & (odds <= high)).any():
             dimensions[f"Quota {low:.2f}-{high:.2f}"] = {
-                "family": "current_odds",
-                "column": "current_odds",
-                "kind": "range",
-                "low": low,
-                "high": high,
+                "family": "current_odds", "column": "current_odds",
+                "kind": "range", "low": low, "high": high,
             }
 
-    prob = pd.to_numeric(closed["prob_1"], errors="coerce")
-    for threshold in [50, 55, 60, 65, 70, 75, 80]:
-        if (prob >= threshold).any():
-            dimensions[f"Prob.1≥{threshold}%"] = {
-                "family": "prob_1",
-                "column": "prob_1",
-                "kind": "minimum",
-                "value": threshold,
+    movement_filters = [
+        ("Quota scesa >=5%", None, -5.0),
+        ("Quota scesa 2-5%", -5.0, -2.0),
+        ("Quota stabile +/-2%", -2.0, 2.0),
+        ("Quota salita 2-5%", 2.0, 5.0),
+        ("Quota salita >=5%", 5.0, None),
+    ]
+    series = pd.to_numeric(closed["_odds_move_pct"], errors="coerce")
+    for label, low, high in movement_filters:
+        mask = pd.Series(True, index=closed.index)
+        if low is not None:
+            mask &= series >= low
+        if high is not None:
+            mask &= series <= high
+        if mask.any():
+            dimensions[label] = {
+                "family": "_odds_move_pct",
+                "column": "_odds_move_pct",
+                "kind": "open_range",
+                "low": low, "high": high,
             }
+
+    value_series = pd.to_numeric(closed["_value_vs_fair_pct"], errors="coerce")
+    for label, threshold in [("Value >=2%",2.0),("Value >=5%",5.0),("Value >=10%",10.0)]:
+        if (value_series >= threshold).any():
+            dimensions[label] = {
+                "family":"_value_vs_fair_pct",
+                "column":"_value_vs_fair_pct",
+                "kind":"minimum","value":threshold,
+            }
+    if (value_series < 0).any():
+        dimensions["Value negativo"] = {
+            "family":"_value_vs_fair_pct",
+            "column":"_value_vs_fair_pct",
+            "kind":"maximum_strict","value":0.0,
+        }
+
+    allb_delta = pd.to_numeric(closed["_allb_delta"], errors="coerce")
+    if (allb_delta > 0).any():
+        dimensions["Allibramento > media"] = {
+            "family":"_allb_delta","column":"_allb_delta",
+            "kind":"minimum_strict","value":0.0,
+        }
+    if (allb_delta < 0).any():
+        dimensions["Allibramento < media"] = {
+            "family":"_allb_delta","column":"_allb_delta",
+            "kind":"maximum_strict","value":0.0,
+        }
 
     items = list(dimensions.items())
-    results = []
-    selections = {}
+    results, selections = [], {}
 
     for size in range(1, max_filters + 1):
         for combo in combinations(items, size):
             labels = [label for label, _ in combo]
             specs = [spec for _, spec in combo]
-
-            # Do not combine two filters from the same family
-            # (e.g. two different odds bands or two thresholds of prob_1).
             families = [spec["family"] for spec in specs]
             if len(families) != len(set(families)):
                 continue
@@ -661,39 +738,33 @@ def automatic_strategy_search(
 
             for spec in specs:
                 column = spec["column"]
+                values = pd.to_numeric(subset[column], errors="coerce") if spec["kind"] != "equals" else None
 
                 if spec["kind"] == "equals":
-                    subset = subset[
-                        subset[column].astype(str) == str(spec["value"])
-                    ]
-
+                    subset = subset[subset[column].astype(str) == str(spec["value"])]
                 elif spec["kind"] == "range":
-                    values = pd.to_numeric(
-                        subset[column], errors="coerce"
-                    )
-                    subset = subset[
-                        (values >= spec["low"])
-                        & (values <= spec["high"])
-                    ]
-
+                    subset = subset[(values >= spec["low"]) & (values <= spec["high"])]
+                elif spec["kind"] == "open_range":
+                    mask = pd.Series(True, index=subset.index)
+                    if spec["low"] is not None:
+                        mask &= values >= spec["low"]
+                    if spec["high"] is not None:
+                        mask &= values <= spec["high"]
+                    subset = subset[mask]
                 elif spec["kind"] == "minimum":
-                    values = pd.to_numeric(
-                        subset[column], errors="coerce"
-                    )
                     subset = subset[values >= spec["value"]]
+                elif spec["kind"] == "minimum_strict":
+                    subset = subset[values > spec["value"]]
+                elif spec["kind"] == "maximum_strict":
+                    subset = subset[values < spec["value"]]
 
             if len(subset) < min_sample:
                 continue
 
             subset = subset.sort_values(["date", "time", "id"]).copy()
             n = len(subset)
-
-            # Chronological validation: earlier data for discovery,
-            # most recent data for out-of-sample check.
             validation_n = max(1, int(math.ceil(n * validation_ratio)))
             train_n = n - validation_n
-
-            # Need at least 2 observations in each part for a meaningful split.
             use_validation = train_n >= 2 and validation_n >= 2
 
             if use_validation:
@@ -702,22 +773,13 @@ def automatic_strategy_search(
                 train_stats = strategy_statistics(train_df)
                 test_stats = strategy_statistics(test_df)
             else:
-                train_df = subset
-                test_df = subset.iloc[0:0]
-                train_stats = strategy_statistics(train_df)
-                test_stats = {
-                    "total": 0, "closed": 0, "wins": 0, "losses": 0,
-                    "win_rate": 0, "staked": 0, "profit": 0, "roi": 0,
-                    "avg_odds": 0, "max_losing_streak": 0,
-                }
+                train_stats = strategy_statistics(subset)
+                test_stats = {"closed":0,"roi":0}
 
             total_stats = strategy_statistics(subset)
-
-            # Reliability grows with sample size, reaching 100% around 100 matches.
+            stability = stability_statistics(subset)
             sample_reliability = min(1.0, n / 100.0)
 
-            # Validation component: positive recent/out-of-sample performance
-            # is rewarded; negative performance is penalized.
             if use_validation:
                 if train_stats["roi"] > 0 and test_stats["roi"] > 0:
                     validation_factor = 1.0
@@ -730,26 +792,39 @@ def automatic_strategy_search(
             else:
                 validation_factor = 0.50
 
-            # Penalize long losing streaks.
             streak_penalty = 1 / (1 + 0.12 * total_stats["max_losing_streak"])
-
-            # Balanced score. Profit remains in euros and ROI is percentage.
-            score = (
-                total_stats["roi"] * 0.45
-                + total_stats["win_rate"] * 0.15
-                + (total_stats["profit"] / 20.0) * 0.40
+            stability_factor = (
+                0.55 + 0.45 * (stability["stability_pct"] / 100.0)
+                if stability["total_blocks"] else 0.60
             )
-            score *= sample_reliability
-            score *= validation_factor
-            score *= streak_penalty
+
+            roi_delta_vs_base = total_stats["roi"] - baseline_roi
+
+            score = (
+                total_stats["roi"] * 0.35
+                + total_stats["win_rate"] * 0.10
+                + (total_stats["profit"] / 20.0) * 0.30
+                + roi_delta_vs_base * 0.25
+            )
+            score *= sample_reliability * validation_factor * streak_penalty * stability_factor
+
+            if n < 30:
+                trust_label = "🔴 Esplorativa"
+            elif n < 50:
+                trust_label = "🟠 Primi segnali"
+            elif n < 100:
+                trust_label = "🟡 Interessante"
+            elif n < 200:
+                trust_label = "🟢 Abbastanza solida"
+            else:
+                trust_label = "🟢🟢 Molto più solida"
 
             strategy_id = f"S{len(results)+1:05d}"
-            strategy_name = " + ".join(labels)
-
             results.append({
                 "ID": strategy_id,
-                "Strategia": strategy_name,
+                "Strategia": " + ".join(labels),
                 "Partite": total_stats["closed"],
+                "Attendibilità": trust_label,
                 "Vinte": total_stats["wins"],
                 "Perse": total_stats["losses"],
                 "Win rate %": round(total_stats["win_rate"], 2),
@@ -757,12 +832,22 @@ def automatic_strategy_search(
                 "Puntato €": round(total_stats["staked"], 2),
                 "Profitto €": round(total_stats["profit"], 2),
                 "ROI %": round(total_stats["roi"], 2),
+                "ROI base %": round(baseline_roi, 2),
+                "Δ ROI vs base": round(roi_delta_vs_base, 2),
                 "Profitto / 100€": round(
                     (total_stats["profit"] / total_stats["staked"] * 100)
-                    if total_stats["staked"] else 0,
-                    2,
+                    if total_stats["staked"] else 0, 2
                 ),
                 "Max perdite consecutive": total_stats["max_losing_streak"],
+                "Blocchi positivi": (
+                    f'{stability["positive_blocks"]}/{stability["total_blocks"]}'
+                    if stability["total_blocks"] else "n.d."
+                ),
+                "Stabilità %": round(stability["stability_pct"], 1),
+                "Peggior ROI blocco %": (
+                    round(stability["worst_block_roi"], 2)
+                    if stability["total_blocks"] else None
+                ),
                 "ROI ricerca %": round(train_stats["roi"], 2),
                 "ROI verifica %": round(test_stats["roi"], 2) if use_validation else None,
                 "Partite verifica": test_stats["closed"] if use_validation else 0,
@@ -770,7 +855,6 @@ def automatic_strategy_search(
                 "Affidabilità campione %": round(sample_reliability * 100, 1),
                 "Punteggio": round(score, 2),
             })
-
             selections[strategy_id] = subset.index.tolist()
 
     if not results:
@@ -782,12 +866,7 @@ def automatic_strategy_search(
     ).head(top_n)
 
     valid_ids = set(table["ID"])
-    selections = {
-        strategy_id: indices
-        for strategy_id, indices in selections.items()
-        if strategy_id in valid_ids
-    }
-
+    selections = {sid: idx for sid, idx in selections.items() if sid in valid_ids}
     return table.reset_index(drop=True), selections
 
 
@@ -825,6 +904,7 @@ def editor_form(data, prefix):
     for i,(label,col) in enumerate(METHOD_COLUMNS.items()):
         data[col] = 1 if cols[i%3].checkbox(label, value=bool(data.get(col,0)), key=f"{prefix}_{col}") else 0
     return data
+
 
 st.title("📊 Stats4Bets")
 st.caption(f"Archivio e analisi partite • Archivio: {storage_label()}")
@@ -1311,10 +1391,11 @@ elif page == "🧪 Laboratorio Strategie":
 
 
 elif page == "🧠 Trova metodo migliore":
-    st.subheader("🧠 Motore Strategie V2.2")
+    st.subheader("🧠 Motore Strategie V3")
     st.caption(
-        "Cerca automaticamente le combinazioni migliori e verifica "
-        "se reggono anche sulla parte più recente dello storico."
+        "Cerca combinazioni tra indicatori, range quota, movimento quota, "
+        "value rispetto alla quota reale e allibramento. Confronta ogni "
+        "strategia con la base 'gioco tutte' e ne verifica la stabilità nel tempo."
     )
 
     df = get_matches()
@@ -1422,6 +1503,11 @@ elif page == "🧠 Trova metodo migliore":
                 "Profitto / 100€ mostra quanto rende la strategia ogni 100 € "
                 "complessivamente puntati: è utile per confrontare strategie "
                 "con profitti simili ma capitale impiegato diverso."
+            )
+            st.caption(
+                "Δ ROI vs base mostra quanto il filtro migliora o peggiora rispetto "
+                "a giocare tutte le partite. Stabilità controlla il rendimento in "
+                "3 blocchi cronologici separati."
             )
 
             st.markdown("### 🔎 Apri una strategia")
