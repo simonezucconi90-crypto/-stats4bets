@@ -673,14 +673,14 @@ def automatic_strategy_search(
                 "family": "current_odds", "column": "current_odds",
                 "kind": "range", "low": low, "high": high,
             }
+            movement_filters = [
+    ("Quota scesa >=5%", None, -5.0),
+    ("Quota scesa 2-5%", -5.0, -2.0),
+    ("Quota salita 2-5%", 2.0, 5.0),
+    ("Quota salita >=5%", 5.0, None),
+]
 
-    movement_filters = [
-        ("Quota scesa >=5%", None, -5.0),
-        ("Quota scesa 2-5%", -5.0, -2.0),
-        ("Quota stabile +/-2%", -2.0, 2.0),
-        ("Quota salita 2-5%", 2.0, 5.0),
-        ("Quota salita >=5%", 5.0, None),
-    ]
+    
     series = pd.to_numeric(closed["_odds_move_pct"], errors="coerce")
     for label, low, high in movement_filters:
         mask = pd.Series(True, index=closed.index)
