@@ -114,8 +114,12 @@ def fetch_by_date(date_iso, api_key):
     )
     response.raise_for_status()
     payload = response.json()
-    if payload.get("errors"):
-        raise RuntimeError(f"API-Football: {payload['errors']}")
+
+    errors = payload.get("errors") or {}
+    if errors:
+        print(f"DATA NON DISPONIBILE API: {date_iso} -> {errors}")
+        return None
+
     return payload.get("response", [])
 
 
@@ -267,17 +271,37 @@ def main():
         if date_iso:
             grouped[date_iso].append(match)
 
-    fixture_cache = {
-        date_iso: fetch_by_date(date_iso, api_key)
-        for date_iso in grouped
-    }
+    fixture_cache = {}
+    skipped_dates = set()
+
+    for date_iso in grouped:
+        try:
+            fixtures = fetch_by_date(date_iso, api_key)
+        except Exception as exc:
+            print(f"ERRORE API SULLA DATA {date_iso}: {exc}")
+            fixtures = None
+
+        if fixtures is None:
+            skipped_dates.add(date_iso)
+            fixture_cache[date_iso] = []
+        else:
+            fixture_cache[date_iso] = fixtures
 
     updated = 0
     waiting = 0
     uncertain = 0
+    skipped_api = 0
 
     for match in open_matches:
         date_iso = str(match.get("date") or "")[:10]
+
+        if date_iso in skipped_dates:
+            skipped_api += 1
+            print(
+                f'SALTATA PER LIMITE PIANO API: '
+                f'{match.get("match_name")} ({date_iso})'
+            )
+            continue
 
         fixture, safe, confidence, reason, details = choose_fixture(
             match,
@@ -286,12 +310,12 @@ def main():
 
         if not fixture:
             uncertain += 1
-            print(f'â NESSUN MATCH: {match.get("match_name")}')
+            print(f'✗ NESSUN MATCH: {match.get("match_name")}')
             continue
 
         if not safe:
             uncertain += 1
-            print(f'â MATCH SCARTATO: {match.get("match_name")}')
+            print(f'✗ MATCH SCARTATO: {match.get("match_name")}')
             print(
                 f'  API candidata: {details.get("api_home")} - '
                 f'{details.get("api_away")}'
@@ -305,7 +329,7 @@ def main():
             print(f'  Motivo: {reason}')
             continue
 
-        print(f'â MATCH ACCETTATO: {match.get("match_name")}')
+        print(f'✓ MATCH ACCETTATO: {match.get("match_name")}')
         print(
             f'  API: {details.get("api_home")} - '
             f'{details.get("api_away")}'
@@ -376,7 +400,7 @@ def main():
         print(
             f'AGGIORNATA: {match.get("match_name")} '
             f'{values["final_score"]} {outcome} '
-            f'profitto {profit:+.2f} â¬'
+            f'profitto {profit:+.2f} €'
         )
 
     print(
