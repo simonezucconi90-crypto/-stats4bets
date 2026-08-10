@@ -11,6 +11,23 @@ API_URL = "https://v3.football.api-sports.io/fixtures"
 FINISHED = {"FT", "AET", "PEN"}
 STAKE = 20.0
 
+# Piano Free: limitiamo le chiamate alle date recenti/attuali utili.
+# Manteniamo una piccola finestra attorno a oggi per evitare sprechi.
+API_LOOKBACK_DAYS = 1
+API_LOOKAHEAD_DAYS = 1
+
+
+def is_useful_api_date(date_iso):
+    try:
+        d = datetime.strptime(date_iso, "%Y-%m-%d").date()
+    except Exception:
+        return False
+
+    today = datetime.now().date()
+    min_date = today - timedelta(days=API_LOOKBACK_DAYS)
+    max_date = today + timedelta(days=API_LOOKAHEAD_DAYS)
+    return min_date <= d <= max_date
+
 HIGH_CONFIDENCE = 0.72
 REVIEW_CONFIDENCE = 0.65
 
@@ -117,10 +134,27 @@ def fetch_by_date(date_iso, api_key):
 
     errors = payload.get("errors") or {}
     if errors:
-        print(f"DATA NON DISPONIBILE API: {date_iso} -> {errors}")
-        return None
+        errors_text = str(errors).lower()
 
-    return payload.get("response", [])
+        if "suspended" in errors_text or "access" in errors:
+            return {
+                "status": "suspended",
+                "fixtures": [],
+                "errors": errors,
+            }
+
+        return {
+            "status": "unavailable",
+            "fixtures": [],
+            "errors": errors,
+        }
+
+    return {
+        "status": "ok",
+        "fixtures": payload.get("response", []),
+        "errors": {},
+    }
+
 
 
 def candidate_score(db_match, fixture):
@@ -274,18 +308,84 @@ def main():
     fixture_cache = {}
     skipped_dates = set()
 
-    for date_iso in grouped:
-        try:
-            fixtures = fetch_by_date(date_iso, api_key)
-        except Exception as exc:
-            print(f"ERRORE API SULLA DATA {date_iso}: {exc}")
-            fixtures = None
+    # Interroghiamo solo le date che possono davvero servire.
+    useful_dates = [
+        date_iso
+        for date_iso in grouped
+        if is_useful_api_date(date_iso)
+    ]
 
-        if fixtures is None:
+    old_dates = [
+        date_iso
+        for date_iso in grouped
+        if date_iso not in useful_dates
+    ]
+
+    print(
+        f"Date aperte totali: {len(grouped)} | "
+        f"Date da interrogare: {len(useful_dates)} | "
+        f"Date saltate senza chiamata API: {len(old_dates)}"
+    )
+
+    if useful_dates:
+        print(
+            "Richieste API previste in questo aggiornamento: "
+            f"massimo {len(useful_dates)}"
+        )
+    else:
+        print("Nessuna richiesta API necessaria.")
+
+    for date_iso in old_dates:
+        skipped_dates.add(date_iso)
+        fixture_cache[date_iso] = []
+        print(f"SALTO SENZA CHIAMATA API: {date_iso}")
+
+    api_calls = 0
+    api_suspended = False
+
+    for date_iso in useful_dates:
+        if api_suspended:
             skipped_dates.add(date_iso)
             fixture_cache[date_iso] = []
-        else:
-            fixture_cache[date_iso] = fixtures
+            print(
+                f"SALTO {date_iso}: account API già rilevato come sospeso."
+            )
+            continue
+
+        try:
+            api_calls += 1
+            result = fetch_by_date(date_iso, api_key)
+        except Exception as exc:
+            print(f"ERRORE API SULLA DATA {date_iso}: {exc}")
+            skipped_dates.add(date_iso)
+            fixture_cache[date_iso] = []
+            continue
+
+        if result["status"] == "suspended":
+            api_suspended = True
+            skipped_dates.add(date_iso)
+            fixture_cache[date_iso] = []
+            print(
+                f"ACCOUNT API SOSPESO rilevato su {date_iso}: "
+                f"{result['errors']}"
+            )
+            print(
+                "Interrompo le ulteriori chiamate API per non sprecare richieste."
+            )
+            continue
+
+        if result["status"] == "unavailable":
+            skipped_dates.add(date_iso)
+            fixture_cache[date_iso] = []
+            print(
+                f"DATA NON DISPONIBILE API: {date_iso} -> "
+                f"{result['errors']}"
+            )
+            continue
+
+        fixture_cache[date_iso] = result["fixtures"]
+
+    print(f"Richieste API effettivamente eseguite: {api_calls}")
 
     updated = 0
     waiting = 0
@@ -298,7 +398,7 @@ def main():
         if date_iso in skipped_dates:
             skipped_api += 1
             print(
-                f'SALTATA PER LIMITE PIANO API: '
+                f'SALTATA SENZA AGGIORNAMENTO API: '
                 f'{match.get("match_name")} ({date_iso})'
             )
             continue
