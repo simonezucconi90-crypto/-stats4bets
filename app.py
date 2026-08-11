@@ -9,6 +9,7 @@ from datetime import datetime
 from itertools import combinations
 
 import pandas as pd
+import numpy as np
 import requests
 import streamlit as st
 
@@ -622,6 +623,7 @@ def stability_statistics(df):
     }
 
 
+@st.cache_data(show_spinner=False)
 def automatic_strategy_search(
     df,
     min_sample=10,
@@ -635,10 +637,12 @@ def automatic_strategy_search(
 
     closed = add_strategy_derived_columns(closed)
     closed = closed.sort_values(["date", "time", "id"]).copy()
+    closed = closed.reset_index(drop=False).rename(columns={"index": "_source_index"})
 
     baseline_stats = strategy_statistics(closed)
     baseline_roi = baseline_stats["roi"]
     dimensions = {}
+    n_rows = len(closed)
 
     categorical = {
         "ALLB colore": "allibramento_color",
@@ -655,114 +659,128 @@ def automatic_strategy_search(
         "Campionato": "league",
     }
 
+    string_cache = {}
+    numeric_cache = {}
+
     for label, column in categorical.items():
         if column not in closed.columns:
             continue
-        values = closed[column].dropna().astype(str).str.strip().unique()
-        for value in values:
+
+        arr = (
+            closed[column]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .to_numpy()
+        )
+        string_cache[column] = arr
+
+        for value in pd.unique(arr):
             if value and value.lower() not in {"nan", "none"}:
-                dimensions[f"{label}={value}"] = {
-                    "family": column, "column": column,
-                    "kind": "equals", "value": value,
-                }
+                mask = arr == value
+                if mask.any():
+                    dimensions[f"{label}={value}"] = {
+                        "family": column,
+                        "mask": mask,
+                    }
 
-    odds = pd.to_numeric(closed["current_odds"], errors="coerce")
+    def num_array(column):
+        if column not in numeric_cache:
+            numeric_cache[column] = pd.to_numeric(
+                closed[column], errors="coerce"
+            ).to_numpy()
+        return numeric_cache[column]
+
+    odds = num_array("current_odds")
     for low, high in STRATEGY_ODDS_RANGES:
-        if ((odds >= low) & (odds <= high)).any():
+        mask = (odds >= low) & (odds <= high)
+        if mask.any():
             dimensions[f"Quota {low:.2f}-{high:.2f}"] = {
-                "family": "current_odds", "column": "current_odds",
-                "kind": "range", "low": low, "high": high,
+                "family": "current_odds",
+                "mask": mask,
             }
-            movement_filters = [
-    ("Quota scesa >=5%", None, -5.0),
-    ("Quota scesa 2-5%", -5.0, -2.0),
-    ("Quota salita 2-5%", 2.0, 5.0),
-    ("Quota salita >=5%", 5.0, None),
-]
 
-    
-    series = pd.to_numeric(closed["_odds_move_pct"], errors="coerce")
+    move = num_array("_odds_move_pct")
+    movement_filters = [
+        ("Quota scesa >=5%", None, -5.0),
+        ("Quota scesa 2-5%", -5.0, -2.0),
+        ("Quota salita 2-5%", 2.0, 5.0),
+        ("Quota salita >=5%", 5.0, None),
+    ]
+
     for label, low, high in movement_filters:
-        mask = pd.Series(True, index=closed.index)
+        mask = np.ones(n_rows, dtype=bool)
+        mask &= ~np.isnan(move)
         if low is not None:
-            mask &= series >= low
+            mask &= move >= low
         if high is not None:
-            mask &= series <= high
+            mask &= move <= high
+
         if mask.any():
             dimensions[label] = {
                 "family": "_odds_move_pct",
-                "column": "_odds_move_pct",
-                "kind": "open_range",
-                "low": low, "high": high,
+                "mask": mask,
             }
 
-    value_series = pd.to_numeric(closed["_value_vs_fair_pct"], errors="coerce")
-    for label, threshold in [("Value >=2%",2.0),("Value >=5%",5.0),("Value >=10%",10.0)]:
-        if (value_series >= threshold).any():
+    value_series = num_array("_value_vs_fair_pct")
+    for label, threshold in [
+        ("Value >=2%", 2.0),
+        ("Value >=5%", 5.0),
+        ("Value >=10%", 10.0),
+    ]:
+        mask = (~np.isnan(value_series)) & (value_series >= threshold)
+        if mask.any():
             dimensions[label] = {
-                "family":"_value_vs_fair_pct",
-                "column":"_value_vs_fair_pct",
-                "kind":"minimum","value":threshold,
+                "family": "_value_vs_fair_pct",
+                "mask": mask,
             }
-    if (value_series < 0).any():
+
+    mask = (~np.isnan(value_series)) & (value_series < 0)
+    if mask.any():
         dimensions["Value negativo"] = {
-            "family":"_value_vs_fair_pct",
-            "column":"_value_vs_fair_pct",
-            "kind":"maximum_strict","value":0.0,
+            "family": "_value_vs_fair_pct",
+            "mask": mask,
         }
 
-    allb_delta = pd.to_numeric(closed["_allb_delta"], errors="coerce")
-    if (allb_delta > 0).any():
+    allb_delta = num_array("_allb_delta")
+
+    mask = (~np.isnan(allb_delta)) & (allb_delta > 0)
+    if mask.any():
         dimensions["Allibramento > media"] = {
-            "family":"_allb_delta","column":"_allb_delta",
-            "kind":"minimum_strict","value":0.0,
+            "family": "_allb_delta",
+            "mask": mask,
         }
-    if (allb_delta < 0).any():
+
+    mask = (~np.isnan(allb_delta)) & (allb_delta < 0)
+    if mask.any():
         dimensions["Allibramento < media"] = {
-            "family":"_allb_delta","column":"_allb_delta",
-            "kind":"maximum_strict","value":0.0,
+            "family": "_allb_delta",
+            "mask": mask,
         }
 
     items = list(dimensions.items())
-    results, selections = [], {}
+    results = []
+    selections = {}
 
     for size in range(1, max_filters + 1):
         for combo in combinations(items, size):
             labels = [label for label, _ in combo]
             specs = [spec for _, spec in combo]
+
             families = [spec["family"] for spec in specs]
             if len(families) != len(set(families)):
                 continue
 
-            subset = closed.copy()
+            combo_mask = specs[0]["mask"].copy()
+            for spec in specs[1:]:
+                combo_mask &= spec["mask"]
 
-            for spec in specs:
-                column = spec["column"]
-                values = pd.to_numeric(subset[column], errors="coerce") if spec["kind"] != "equals" else None
-
-                if spec["kind"] == "equals":
-                    subset = subset[subset[column].astype(str) == str(spec["value"])]
-                elif spec["kind"] == "range":
-                    subset = subset[(values >= spec["low"]) & (values <= spec["high"])]
-                elif spec["kind"] == "open_range":
-                    mask = pd.Series(True, index=subset.index)
-                    if spec["low"] is not None:
-                        mask &= values >= spec["low"]
-                    if spec["high"] is not None:
-                        mask &= values <= spec["high"]
-                    subset = subset[mask]
-                elif spec["kind"] == "minimum":
-                    subset = subset[values >= spec["value"]]
-                elif spec["kind"] == "minimum_strict":
-                    subset = subset[values > spec["value"]]
-                elif spec["kind"] == "maximum_strict":
-                    subset = subset[values < spec["value"]]
-
-            if len(subset) < min_sample:
+            if int(combo_mask.sum()) < min_sample:
                 continue
 
-            subset = subset.sort_values(["date", "time", "id"]).copy()
+            subset = closed.loc[combo_mask].copy()
             n = len(subset)
+
             validation_n = max(1, int(math.ceil(n * validation_ratio)))
             train_n = n - validation_n
             use_validation = train_n >= 2 and validation_n >= 2
@@ -774,7 +792,7 @@ def automatic_strategy_search(
                 test_stats = strategy_statistics(test_df)
             else:
                 train_stats = strategy_statistics(subset)
-                test_stats = {"closed":0,"roi":0}
+                test_stats = {"closed": 0, "roi": 0}
 
             total_stats = strategy_statistics(subset)
             stability = stability_statistics(subset)
@@ -792,10 +810,14 @@ def automatic_strategy_search(
             else:
                 validation_factor = 0.50
 
-            streak_penalty = 1 / (1 + 0.12 * total_stats["max_losing_streak"])
+            streak_penalty = 1 / (
+                1 + 0.12 * total_stats["max_losing_streak"]
+            )
+
             stability_factor = (
                 0.55 + 0.45 * (stability["stability_pct"] / 100.0)
-                if stability["total_blocks"] else 0.60
+                if stability["total_blocks"]
+                else 0.60
             )
 
             roi_delta_vs_base = total_stats["roi"] - baseline_roi
@@ -806,7 +828,12 @@ def automatic_strategy_search(
                 + (total_stats["profit"] / 20.0) * 0.30
                 + roi_delta_vs_base * 0.25
             )
-            score *= sample_reliability * validation_factor * streak_penalty * stability_factor
+            score *= (
+                sample_reliability
+                * validation_factor
+                * streak_penalty
+                * stability_factor
+            )
 
             if n < 30:
                 trust_label = "🔴 Esplorativa"
@@ -820,6 +847,7 @@ def automatic_strategy_search(
                 trust_label = "🟢🟢 Molto più solida"
 
             strategy_id = f"S{len(results)+1:05d}"
+
             results.append({
                 "ID": strategy_id,
                 "Strategia": " + ".join(labels),
@@ -836,7 +864,8 @@ def automatic_strategy_search(
                 "Δ ROI vs base": round(roi_delta_vs_base, 2),
                 "Profitto / 100€": round(
                     (total_stats["profit"] / total_stats["staked"] * 100)
-                    if total_stats["staked"] else 0, 2
+                    if total_stats["staked"] else 0,
+                    2,
                 ),
                 "Max perdite consecutive": total_stats["max_losing_streak"],
                 "Blocchi positivi": (
@@ -849,13 +878,24 @@ def automatic_strategy_search(
                     if stability["total_blocks"] else None
                 ),
                 "ROI ricerca %": round(train_stats["roi"], 2),
-                "ROI verifica %": round(test_stats["roi"], 2) if use_validation else None,
-                "Partite verifica": test_stats["closed"] if use_validation else 0,
-                "Validata": "✅" if use_validation and train_stats["roi"] > 0 and test_stats["roi"] > 0 else "⚠️",
+                "ROI verifica %": (
+                    round(test_stats["roi"], 2) if use_validation else None
+                ),
+                "Partite verifica": (
+                    test_stats["closed"] if use_validation else 0
+                ),
+                "Validata": (
+                    "✅"
+                    if use_validation
+                    and train_stats["roi"] > 0
+                    and test_stats["roi"] > 0
+                    else "⚠️"
+                ),
                 "Affidabilità campione %": round(sample_reliability * 100, 1),
                 "Punteggio": round(score, 2),
             })
-            selections[strategy_id] = subset.index.tolist()
+
+            selections[strategy_id] = subset["_source_index"].tolist()
 
     if not results:
         return pd.DataFrame(), {}
@@ -863,11 +903,16 @@ def automatic_strategy_search(
     table = pd.DataFrame(results).sort_values(
         ["Punteggio", "Profitto €", "ROI %", "Partite"],
         ascending=[False, False, False, False],
-    ).head(top_n)
+    ).head(top_n).reset_index(drop=True)
 
     valid_ids = set(table["ID"])
-    selections = {sid: idx for sid, idx in selections.items() if sid in valid_ids}
-    return table.reset_index(drop=True), selections
+    selections = {
+        sid: idx
+        for sid, idx in selections.items()
+        if sid in valid_ids
+    }
+
+    return table, selections
 
 
 
@@ -1391,7 +1436,7 @@ elif page == "🧪 Laboratorio Strategie":
 
 
 elif page == "🧠 Trova metodo migliore":
-    st.subheader("🧠 Motore Strategie V3")
+    st.subheader("🧠 Motore Strategie V3.1 - Ottimizzato")
     st.caption(
         "Cerca combinazioni tra indicatori, range quota, movimento quota, "
         "value rispetto alla quota reale e allibramento. Confronta ogni "
