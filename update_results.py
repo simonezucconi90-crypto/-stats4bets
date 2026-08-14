@@ -1,34 +1,17 @@
 import os
 import re
+import time
 import unicodedata
-from collections import defaultdict
 from difflib import SequenceMatcher
 from datetime import datetime, timedelta
 
 import requests
 from supabase import create_client
 
-API_URL = "https://v3.football.api-sports.io/fixtures"
-FINISHED = {"FT", "AET", "PEN"}
+API_URL = "https://www.thesportsdb.com/api/v1/json/123/searchevents.php"
 STAKE = 20.0
-
-# Piano Free: limitiamo le chiamate alle date recenti/attuali utili.
-# Manteniamo una piccola finestra attorno a oggi per evitare sprechi.
-API_LOOKBACK_DAYS = 1
-API_LOOKAHEAD_DAYS = 1
-
-
-def is_useful_api_date(date_iso):
-    try:
-        d = datetime.strptime(date_iso, "%Y-%m-%d").date()
-    except Exception:
-        return False
-
-    today = datetime.now().date()
-    min_date = today - timedelta(days=API_LOOKBACK_DAYS)
-    max_date = today + timedelta(days=API_LOOKAHEAD_DAYS)
-    return min_date <= d <= max_date
-
+LOOKBACK_DAYS = 14
+REQUEST_DELAY = 2.1
 HIGH_CONFIDENCE = 0.72
 REVIEW_CONFIDENCE = 0.65
 
@@ -52,39 +35,32 @@ TEAM_ALIASES = {
 }
 
 
-
 def basic_normalize(value):
     value = unicodedata.normalize("NFKD", value or "")
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
     value = value.casefold()
     value = re.sub(
         r"\b(fc|cf|sc|ac|afc|fk|club|calcio|football|futbol|deportivo)\b",
-        " ",
-        value,
+        " ", value
     )
     value = re.sub(r"[^a-z0-9]+", " ", value)
     return re.sub(r"\s+", " ", value).strip()
 
 
 def normalize_team_name(value):
-    normalized = basic_normalize(value)
-
-    # Abbreviazioni comuni e conservative.
-    # Esempio: "U. Catolica" -> "Universidad Catolica".
-    if normalized.startswith("u "):
-        expanded = "universidad " + normalized[2:].strip()
+    value = basic_normalize(value)
+    if value.startswith("u "):
+        expanded = "universidad " + value[2:].strip()
         if expanded in TEAM_ALIASES:
-            normalized = expanded
-
-    return TEAM_ALIASES.get(normalized, normalized)
+            value = expanded
+    return TEAM_ALIASES.get(value, value)
 
 
 def normalize_league_name(value):
     value = basic_normalize(value)
     value = re.sub(
         r"\b(league|liga|championship|cup|super|division|national|professional)\b",
-        " ",
-        value,
+        " ", value
     )
     return re.sub(r"\s+", " ", value).strip()
 
@@ -92,30 +68,23 @@ def normalize_league_name(value):
 def similarity(left, right, team=False):
     a = normalize_team_name(left) if team else basic_normalize(left)
     b = normalize_team_name(right) if team else basic_normalize(right)
-
     if not a or not b:
         return 0.0
 
-    sequence = SequenceMatcher(None, a, b).ratio()
-
+    seq = SequenceMatcher(None, a, b).ratio()
     containment = 0.0
     if a in b or b in a:
         containment = min(len(a), len(b)) / max(len(a), len(b))
 
-    a_words = set(a.split())
-    b_words = set(b.split())
-    union = a_words | b_words
-    token_score = len(a_words & b_words) / len(union) if union else 0.0
-
-    return max(sequence, containment, token_score)
+    aw, bw = set(a.split()), set(b.split())
+    union = aw | bw
+    token = len(aw & bw) / len(union) if union else 0.0
+    return max(seq, containment, token)
 
 
 def league_similarity(left, right):
-    a = normalize_league_name(left)
-    b = normalize_league_name(right)
-    if not a or not b:
-        return 0.0
-    return similarity(a, b)
+    a, b = normalize_league_name(left), normalize_league_name(right)
+    return similarity(a, b) if a and b else 0.0
 
 
 def split_match_name(value):
@@ -123,63 +92,91 @@ def split_match_name(value):
     return (parts[0].strip(), parts[1].strip()) if len(parts) == 2 else ("", "")
 
 
-def fetch_by_date(date_iso, api_key):
-    response = requests.get(
-        API_URL,
-        headers={"x-apisports-key": api_key},
-        params={"date": date_iso, "timezone": "Europe/Rome"},
-        timeout=30,
-    )
-    response.raise_for_status()
-    payload = response.json()
+def useful_date(date_iso):
+    try:
+        d = datetime.strptime(date_iso, "%Y-%m-%d").date()
+    except Exception:
+        return False
+    today = datetime.now().date()
+    return today - timedelta(days=LOOKBACK_DAYS) <= d <= today
 
-    errors = payload.get("errors") or {}
-    if errors:
-        errors_text = str(errors).lower()
 
-        if "suspended" in errors_text or "access" in errors:
-            return {
-                "status": "suspended",
-                "fixtures": [],
-                "errors": errors,
-            }
+def to_int(value):
+    try:
+        return int(value) if value not in (None, "") else None
+    except Exception:
+        return None
 
-        return {
-            "status": "unavailable",
-            "fixtures": [],
-            "errors": errors,
-        }
 
+def convert_event(event):
     return {
-        "status": "ok",
-        "fixtures": payload.get("response", []),
-        "errors": {},
+        "teams": {
+            "home": {"name": event.get("strHomeTeam") or ""},
+            "away": {"name": event.get("strAwayTeam") or ""},
+        },
+        "league": {"name": event.get("strLeague") or ""},
+        "goals": {
+            "home": to_int(event.get("intHomeScore")),
+            "away": to_int(event.get("intAwayScore")),
+        },
+        "status": event.get("strStatus") or "",
+        "date": event.get("dateEvent") or "",
     }
 
+
+def fetch_match(match):
+    home, away = split_match_name(match.get("match_name"))
+    date_iso = str(match.get("date") or "")[:10]
+    if not home or not away:
+        return []
+
+    queries = [(home, away)]
+    nh, na = normalize_team_name(home), normalize_team_name(away)
+    if nh and na and (nh.casefold(), na.casefold()) != (
+        home.casefold(), away.casefold()
+    ):
+        queries.append((nh, na))
+
+    for q_home, q_away in queries:
+        response = requests.get(
+            API_URL,
+            params={"e": f"{q_home}_vs_{q_away}", "d": date_iso},
+            timeout=30,
+        )
+        response.raise_for_status()
+        events = response.json().get("event") or []
+
+        soccer = [
+            convert_event(e)
+            for e in events
+            if str(e.get("strSport") or "").casefold() == "soccer"
+        ]
+        if soccer:
+            return soccer
+
+        time.sleep(REQUEST_DELAY)
+
+    return []
 
 
 def candidate_score(db_match, fixture):
     db_home, db_away = split_match_name(db_match.get("match_name"))
-    api_home = fixture.get("teams", {}).get("home", {}).get("name", "")
-    api_away = fixture.get("teams", {}).get("away", {}).get("name", "")
-
-    db_league = db_match.get("league") or ""
-    api_league = fixture.get("league", {}).get("name", "")
+    api_home = fixture["teams"]["home"]["name"]
+    api_away = fixture["teams"]["away"]["name"]
 
     home_score = similarity(db_home, api_home, team=True)
     away_score = similarity(db_away, api_away, team=True)
-    league_score = league_similarity(db_league, api_league)
-
-    team_score = (home_score + away_score) / 2
-    total = min(1.0, team_score + 0.04 * league_score)
+    league_score = league_similarity(
+        db_match.get("league") or "",
+        fixture["league"]["name"],
+    )
+    total = min(1.0, (home_score + away_score) / 2 + 0.04 * league_score)
 
     return total, {
         "db_home": db_home,
         "db_away": db_away,
         "api_home": api_home,
         "api_away": api_away,
-        "db_league": db_league,
-        "api_league": api_league,
         "home_score": home_score,
         "away_score": away_score,
         "league_score": league_score,
@@ -192,89 +189,79 @@ def choose_fixture(db_match, fixtures):
         total, details = candidate_score(db_match, fixture)
         candidates.append((total, details, fixture))
 
-    candidates.sort(key=lambda item: item[0], reverse=True)
+    candidates.sort(key=lambda x: x[0], reverse=True)
     if not candidates:
         return None, False, 0.0, "nessun candidato", {}
 
     total, details, fixture = candidates[0]
     second = candidates[1][0] if len(candidates) > 1 else 0.0
     margin = total - second
+    hs, aas = details["home_score"], details["away_score"]
+    ls = details["league_score"]
 
-    home_score = details["home_score"]
-    away_score = details["away_score"]
-    league_score = details["league_score"]
+    # Quando la ricerca restituisce un solo evento, il margine non serve:
+    # la conferma viene dai nomi delle due squadre.
+    margin_ok = margin >= 0.05 or len(candidates) == 1
 
-    if (
-        total >= HIGH_CONFIDENCE
-        and home_score >= 0.68
-        and away_score >= 0.58
-        and margin >= 0.05
-    ):
+    if total >= HIGH_CONFIDENCE and hs >= 0.68 and aas >= 0.58 and margin_ok:
         return fixture, True, total, "alta confidenza", details
 
-    alias_home = (
-        normalize_team_name(details["db_home"])
-        == normalize_team_name(details["api_home"])
+    alias_home = normalize_team_name(details["db_home"]) == normalize_team_name(
+        details["api_home"]
     )
-    alias_away = (
-        normalize_team_name(details["db_away"])
-        == normalize_team_name(details["api_away"])
+    alias_away = normalize_team_name(details["db_away"]) == normalize_team_name(
+        details["api_away"]
     )
-
-    extra_confirmation = league_score >= 0.45 or alias_home or alias_away
 
     if (
         REVIEW_CONFIDENCE <= total < HIGH_CONFIDENCE
-        and home_score >= 0.62
-        and away_score >= 0.55
-        and margin >= 0.04
-        and extra_confirmation
+        and hs >= 0.62
+        and aas >= 0.55
+        and margin_ok
+        and (ls >= 0.45 or alias_home or alias_away)
     ):
-        reasons = []
-        if alias_home:
-            reasons.append("alias casa")
-        if alias_away:
-            reasons.append("alias trasferta")
-        if league_score >= 0.45:
-            reasons.append("campionato compatibile")
-
-        return (
-            fixture,
-            True,
-            total,
-            "verifica rafforzata: " + ", ".join(reasons),
-            details,
-        )
+        return fixture, True, total, "verifica rafforzata", details
 
     return fixture, False, total, "confidenza insufficiente", details
 
 
+def finished(date_iso, fixture):
+    hg = fixture["goals"]["home"]
+    ag = fixture["goals"]["away"]
+    if hg is None or ag is None:
+        return False
+
+    status = str(fixture.get("status") or "").casefold()
+    if status in {"ft", "finished", "match finished", "aet", "pen"}:
+        return True
+
+    try:
+        event_date = datetime.strptime(date_iso, "%Y-%m-%d").date()
+    except Exception:
+        return False
+
+    # Per evitare di chiudere una partita live, se lo status non è chiaro
+    # accettiamo il punteggio solo dal giorno successivo.
+    return event_date < datetime.now().date()
+
+
 def determine_outcome(pick, home_goals, away_goals):
     pick = str(pick or "1").strip().upper()
-
     if pick == "1":
         return "V" if home_goals > away_goals else "P"
-
     if pick == "X":
         return "V" if home_goals == away_goals else "P"
-
     if pick == "2":
         return "V" if away_goals > home_goals else "P"
-
     return ""
 
 
 def calculate_money(outcome, current_odds):
     odds = float(current_odds or 0)
-
     if outcome == "V":
-        gross_return = round(STAKE * odds, 2)
-        profit = round(gross_return - STAKE, 2)
-    else:
-        gross_return = 0.0
-        profit = -STAKE
-
-    return gross_return, profit
+        gross = round(STAKE * odds, 2)
+        return gross, round(gross - STAKE, 2)
+    return 0.0, -STAKE
 
 
 def main():
@@ -283,14 +270,9 @@ def main():
         os.environ["SUPABASE_KEY"],
     )
 
-    api_key = os.environ["API_FOOTBALL_KEY"]
-
     open_matches = (
         client.table("matches")
-        .select(
-            "id,date,time,league,match_name,pick,"
-            "current_odds,outcome"
-        )
+        .select("id,date,time,league,match_name,pick,current_odds,outcome")
         .is_("outcome", "null")
         .order("date")
         .execute()
@@ -298,216 +280,90 @@ def main():
         or []
     )
 
-    grouped = defaultdict(list)
-
+    matches = []
     for match in open_matches:
         date_iso = str(match.get("date") or "")[:10]
-
-        if date_iso:
-            grouped[date_iso].append(match)
-
-    fixture_cache = {}
-    skipped_dates = set()
-
-    # Interroghiamo solo le date che possono davvero servire.
-    useful_dates = [
-        date_iso
-        for date_iso in grouped
-        if is_useful_api_date(date_iso)
-    ]
-
-    old_dates = [
-        date_iso
-        for date_iso in grouped
-        if date_iso not in useful_dates
-    ]
+        if useful_date(date_iso):
+            matches.append(match)
+        else:
+            print(
+                f'SALTO FUORI FINESTRA: {match.get("match_name")} ({date_iso})'
+            )
 
     print(
-        f"Date aperte totali: {len(grouped)} | "
-        f"Date da interrogare: {len(useful_dates)} | "
-        f"Date saltate senza chiamata API: {len(old_dates)}"
+        f"Partite aperte: {len(open_matches)} | "
+        f"Da cercare su TheSportsDB: {len(matches)}"
     )
 
-    if useful_dates:
-        print(
-            "Richieste API previste in questo aggiornamento: "
-            f"massimo {len(useful_dates)}"
-        )
-    else:
-        print("Nessuna richiesta API necessaria.")
+    updated = waiting = uncertain = 0
 
-    for date_iso in old_dates:
-        skipped_dates.add(date_iso)
-        fixture_cache[date_iso] = []
-        print(f"SALTO SENZA CHIAMATA API: {date_iso}")
-
-    api_calls = 0
-    api_suspended = False
-
-    for date_iso in useful_dates:
-        if api_suspended:
-            skipped_dates.add(date_iso)
-            fixture_cache[date_iso] = []
-            print(
-                f"SALTO {date_iso}: account API già rilevato come sospeso."
-            )
-            continue
+    for i, match in enumerate(matches, 1):
+        date_iso = str(match.get("date") or "")[:10]
+        print(f'[{i}/{len(matches)}] {match.get("match_name")} ({date_iso})')
 
         try:
-            api_calls += 1
-            result = fetch_by_date(date_iso, api_key)
+            fixtures = fetch_match(match)
         except Exception as exc:
-            print(f"ERRORE API SULLA DATA {date_iso}: {exc}")
-            skipped_dates.add(date_iso)
-            fixture_cache[date_iso] = []
-            continue
-
-        if result["status"] == "suspended":
-            api_suspended = True
-            skipped_dates.add(date_iso)
-            fixture_cache[date_iso] = []
-            print(
-                f"ACCOUNT API SOSPESO rilevato su {date_iso}: "
-                f"{result['errors']}"
-            )
-            print(
-                "Interrompo le ulteriori chiamate API per non sprecare richieste."
-            )
-            continue
-
-        if result["status"] == "unavailable":
-            skipped_dates.add(date_iso)
-            fixture_cache[date_iso] = []
-            print(
-                f"DATA NON DISPONIBILE API: {date_iso} -> "
-                f"{result['errors']}"
-            )
-            continue
-
-        fixture_cache[date_iso] = result["fixtures"]
-
-    print(f"Richieste API effettivamente eseguite: {api_calls}")
-
-    updated = 0
-    waiting = 0
-    uncertain = 0
-    skipped_api = 0
-
-    for match in open_matches:
-        date_iso = str(match.get("date") or "")[:10]
-
-        if date_iso in skipped_dates:
-            skipped_api += 1
-            print(
-                f'SALTATA SENZA AGGIORNAMENTO API: '
-                f'{match.get("match_name")} ({date_iso})'
-            )
+            uncertain += 1
+            print(f"ERRORE TheSportsDB: {exc}")
+            time.sleep(REQUEST_DELAY)
             continue
 
         fixture, safe, confidence, reason, details = choose_fixture(
-            match,
-            fixture_cache.get(date_iso, []),
+            match, fixtures
         )
 
         if not fixture:
             uncertain += 1
             print(f'✗ NESSUN MATCH: {match.get("match_name")}')
+            time.sleep(REQUEST_DELAY)
             continue
+
+        print(
+            f'  Candidata: {details.get("api_home")} - '
+            f'{details.get("api_away")} | confidenza={confidence:.3f}'
+        )
 
         if not safe:
             uncertain += 1
-            print(f'✗ MATCH SCARTATO: {match.get("match_name")}')
-            print(
-                f'  API candidata: {details.get("api_home")} - '
-                f'{details.get("api_away")}'
-            )
-            print(
-                f'  Confidenza={confidence:.3f} | '
-                f'Casa={details.get("home_score", 0):.3f} | '
-                f'Trasferta={details.get("away_score", 0):.3f} | '
-                f'Lega={details.get("league_score", 0):.3f}'
-            )
-            print(f'  Motivo: {reason}')
+            print(f"  ✗ SCARTATA: {reason}")
+            time.sleep(REQUEST_DELAY)
             continue
 
-        print(f'✓ MATCH ACCETTATO: {match.get("match_name")}')
-        print(
-            f'  API: {details.get("api_home")} - '
-            f'{details.get("api_away")}'
-        )
-        print(
-            f'  Confidenza={confidence:.3f} | '
-            f'Casa={details.get("home_score", 0):.3f} | '
-            f'Trasferta={details.get("away_score", 0):.3f} | '
-            f'Lega={details.get("league_score", 0):.3f}'
-        )
-        print(f'  Motivo: {reason}')
-
-        status = (
-            fixture.get("fixture", {})
-            .get("status", {})
-            .get("short", "")
-        )
-
-        home_goals = (
-            fixture.get("goals", {})
-            .get("home")
-        )
-        away_goals = (
-            fixture.get("goals", {})
-            .get("away")
-        )
-
-        if (
-            status not in FINISHED
-            or home_goals is None
-            or away_goals is None
-        ):
+        if not finished(date_iso, fixture):
             waiting += 1
+            print("  ⏳ non ancora conclusa / punteggio non disponibile")
+            time.sleep(REQUEST_DELAY)
             continue
 
-        outcome = determine_outcome(
-            match.get("pick"),
-            int(home_goals),
-            int(away_goals),
-        )
-
+        hg, ag = fixture["goals"]["home"], fixture["goals"]["away"]
+        outcome = determine_outcome(match.get("pick"), hg, ag)
         if not outcome:
             uncertain += 1
+            time.sleep(REQUEST_DELAY)
             continue
 
-        gross_return, profit = calculate_money(
-            outcome,
-            match.get("current_odds"),
-        )
-
-        # Il workflow risultati modifica soltanto questi quattro campi.
+        gross, profit = calculate_money(outcome, match.get("current_odds"))
         values = {
-            "final_score": f"{home_goals}-{away_goals}",
+            "final_score": f"{hg}-{ag}",
             "outcome": outcome,
-            "gross_return": gross_return,
+            "gross_return": gross,
             "profit": profit,
         }
 
-        (
-            client.table("matches")
-            .update(values)
-            .eq("id", match["id"])
-            .execute()
-        )
-
+        client.table("matches").update(values).eq("id", match["id"]).execute()
         updated += 1
 
         print(
-            f'AGGIORNATA: {match.get("match_name")} '
-            f'{values["final_score"]} {outcome} '
+            f'  ✓ AGGIORNATA: {values["final_score"]} {outcome} '
             f'profitto {profit:+.2f} €'
         )
+        time.sleep(REQUEST_DELAY)
 
     print(
         f"Completato: {updated} aggiornate, "
         f"{waiting} non terminate, "
-        f"{uncertain} non abbinate con sicurezza."
+        f"{uncertain} non trovate/abbinate con sicurezza."
     )
 
 
