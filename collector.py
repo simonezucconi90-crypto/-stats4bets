@@ -192,7 +192,13 @@ def colour_after(text, label):
 
 def parse_detail(html, base):
     text = flat_text(html)
-
+    # Numero di Comparazioni Affini, es. "1861 C. AFF."
+    c_aff_count_match = re.search(
+        r"\b(\d+)\s+C\.\s*AFF\.",
+        text,
+        re.I
+    )
+    c_aff_count = int(c_aff_count_match.group(1)) if c_aff_count_match else None
     probability = re.search(
         r"PROBABILITA['’]?\s*1X2.*?\b1\s+X\s+2\s+"
         r"(\d+(?:[.,]\d+)?)%\s+(\d+(?:[.,]\d+)?)%\s+(\d+(?:[.,]\d+)?)%",
@@ -258,6 +264,7 @@ def parse_detail(html, base):
         "allibramento_avg": allib_avg,
         "stake": 20.0,
         "played_odds": current_1 or base["list_odds"],
+        "c_aff_count": c_aff_count,
         **indicators,
     }
 
