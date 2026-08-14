@@ -1301,27 +1301,28 @@ elif page == "📊 Dashboard":
             errors="coerce"
         ).fillna(0.0)
 
-        closed["profitto_cumulato"] = closed["profit"].cumsum().round(2)
+                closed["profitto_cumulato"] = closed["profit"].cumsum().round(2)
 
-closed["Giocata"] = range(1, len(closed) + 1)
+        # Numero progressivo della giocata
+        closed["Giocata"] = range(1, len(closed) + 1)
 
-# Linea di tendenza del profitto cumulato
-x = closed["Giocata"].to_numpy(dtype=float)
-y = closed["profitto_cumulato"].to_numpy(dtype=float)
+        # Linea di tendenza del profitto cumulato
+        x = closed["Giocata"].to_numpy(dtype=float)
+        y = closed["profitto_cumulato"].to_numpy(dtype=float)
 
-if len(closed) >= 2:
-    coeff = np.polyfit(x, y, 1)
-    closed["Tendenza"] = np.polyval(coeff, x)
-else:
-    closed["Tendenza"] = closed["profitto_cumulato"]
+        if len(closed) >= 2:
+            coeff = np.polyfit(x, y, 1)
+            closed["Tendenza"] = np.polyval(coeff, x)
+        else:
+            closed["Tendenza"] = closed["profitto_cumulato"]
 
-st.markdown("### 📈 Andamento profitto cumulato")
+        st.markdown("### 📈 Andamento profitto cumulato")
 
-st.line_chart(
-    closed.set_index("Giocata")[
-        ["profitto_cumulato", "Tendenza"]
-    ]
-)
+        st.line_chart(
+            closed.set_index("Giocata")[
+                ["profitto_cumulato", "Tendenza"]
+            ]
+        )
 
         ultimo_profitto = float(closed["profitto_cumulato"].iloc[-1])
         profitto_dashboard = round(float(s["profit"]), 2)
