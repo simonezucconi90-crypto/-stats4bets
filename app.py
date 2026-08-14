@@ -31,7 +31,7 @@ METHOD_COLUMNS = {
 BASE_COLUMNS = [
     "id","date","time","league","match_name","round_name","market","pick",
     "selected_by_ale","associated_method","prob_1","prob_x","prob_2",
-    "fair_odds","opening_odds","current_odds","c_aff","flbk","c_fb",
+    "fair_odds","opening_odds","current_odds","c_aff","c_aff_count","flbk","c_fb",
     "qra_qa","qi_qa","allibramento_color","allibramento_value",
     "allibramento_avg","allb","mtr","scl","cal","status","stake",
     "played_odds","outcome","final_score","gross_return","profit"
@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS matches (
     opening_odds REAL,
     current_odds REAL,
     c_aff TEXT,
+    c_aff_count INTEGER,
     flbk TEXT,
     c_fb TEXT,
     qra_qa TEXT,
@@ -345,6 +346,7 @@ def blank_match():
         "opening_odds": 0.0,
         "current_odds": 0.0,
         "c_aff": "",
+        "c_aff_count": None,
         "flbk": "",
         "c_fb": "",
         "qra_qa": "",
@@ -690,7 +692,33 @@ def automatic_strategy_search(
                 closed[column], errors="coerce"
             ).to_numpy()
         return numeric_cache[column]
+    # Numero Comparazioni Affini
+    caff_count = num_array("c_aff_count")
 
+    mask = (~np.isnan(caff_count)) & (caff_count <= 200)
+    if mask.any():
+        dimensions["C.AFF. comparazioni ≤200"] = {
+            "family": "c_aff_count",
+            "mask": mask,
+        }
+
+    mask = (
+        (~np.isnan(caff_count))
+        & (caff_count >= 201)
+        & (caff_count <= 500)
+    )
+    if mask.any():
+        dimensions["C.AFF. comparazioni 201-500"] = {
+            "family": "c_aff_count",
+            "mask": mask,
+        }
+
+    mask = (~np.isnan(caff_count)) & (caff_count >= 501)
+    if mask.any():
+        dimensions["C.AFF. comparazioni ≥501"] = {
+            "family": "c_aff_count",
+            "mask": mask,
+        }
     odds = num_array("current_odds")
     for low, high in STRATEGY_ODDS_RANGES:
         mask = (odds >= low) & (odds <= high)
