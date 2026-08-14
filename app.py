@@ -1303,13 +1303,25 @@ elif page == "📊 Dashboard":
 
         closed["profitto_cumulato"] = closed["profit"].cumsum().round(2)
 
-        # Etichetta progressiva leggibile e stabile.
-        closed["Giocata"] = range(1, len(closed) + 1)
+closed["Giocata"] = range(1, len(closed) + 1)
 
-        st.markdown("### 📈 Andamento profitto cumulato")
-        st.line_chart(
-            closed.set_index("Giocata")["profitto_cumulato"]
-        )
+# Linea di tendenza del profitto cumulato
+x = closed["Giocata"].to_numpy(dtype=float)
+y = closed["profitto_cumulato"].to_numpy(dtype=float)
+
+if len(closed) >= 2:
+    coeff = np.polyfit(x, y, 1)
+    closed["Tendenza"] = np.polyval(coeff, x)
+else:
+    closed["Tendenza"] = closed["profitto_cumulato"]
+
+st.markdown("### 📈 Andamento profitto cumulato")
+
+st.line_chart(
+    closed.set_index("Giocata")[
+        ["profitto_cumulato", "Tendenza"]
+    ]
+)
 
         ultimo_profitto = float(closed["profitto_cumulato"].iloc[-1])
         profitto_dashboard = round(float(s["profit"]), 2)
