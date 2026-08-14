@@ -98,7 +98,6 @@ def secret(name, default=""):
     return os.getenv(name, default)
 
 
-
 def github_configured():
     return all([
         secret("GITHUB_TOKEN"),
@@ -114,7 +113,6 @@ def github_headers():
         "Authorization": f'Bearer {secret("GITHUB_TOKEN")}',
         "X-GitHub-Api-Version": "2022-11-28",
     }
-
 
 
 def trigger_named_workflow(workflow_file):
@@ -498,8 +496,6 @@ def apply_strategy_filters(df, filters, min_odds, max_odds, min_prob, max_prob):
     return filtered
 
 
-
-
 def max_losing_streak(df):
     if df.empty or "outcome" not in df.columns:
         return 0
@@ -521,7 +517,6 @@ def strategy_statistics(df):
         **s,
         "max_losing_streak": max_losing_streak(df),
     }
-
 
 
 STRATEGY_ODDS_RANGES = [
@@ -575,7 +570,6 @@ def odds_range_analysis(df):
         ["Profitto €", "ROI %", "Partite"],
         ascending=[False, False, False],
     ).reset_index(drop=True)
-
 
 
 def add_strategy_derived_columns(df):
@@ -692,6 +686,7 @@ def automatic_strategy_search(
                 closed[column], errors="coerce"
             ).to_numpy()
         return numeric_cache[column]
+
     # Numero Comparazioni Affini
     caff_count = num_array("c_aff_count")
 
@@ -719,6 +714,7 @@ def automatic_strategy_search(
             "family": "c_aff_count",
             "mask": mask,
         }
+
     odds = num_array("current_odds")
     for low, high in STRATEGY_ODDS_RANGES:
         mask = (odds >= low) & (odds <= high)
@@ -941,7 +937,6 @@ def automatic_strategy_search(
     }
 
     return table, selections
-
 
 
 def editor_form(data, prefix):
@@ -1266,8 +1261,10 @@ elif page == "✏️ Modifica/Elimina":
 
 elif page == "📊 Dashboard":
     st.subheader("📊 Dashboard")
+
     df = get_matches()
     s = summary(df)
+
     row1 = st.columns(4)
     row1[0].metric("Partite", s["total"])
     row1[1].metric("Concluse", s["closed"])
@@ -1279,10 +1276,14 @@ elif page == "📊 Dashboard":
     row2[1].metric("💰 Profitto", f'€ {s["profit"]:.2f}')
     row2[2].metric("📈 ROI", f'{s["roi"]:.2f}%')
     row2[3].metric("Quota media", f'{s["avg_odds"]:.2f}')
-    closed = df[df["outcome"].isin(["V","P"])].copy() if not df.empty else df
+
+    closed = (
+        df[df["outcome"].isin(["V", "P"])].copy()
+        if not df.empty
+        else df
+    )
+
     if not closed.empty:
-        # Il profitto cumulato deve seguire l'ordine reale delle giocate.
-        # Prima ordiniamo cronologicamente, poi facciamo la somma cumulata.
         closed["_date_sort"] = pd.to_datetime(
             closed["date"],
             errors="coerce"
@@ -1301,30 +1302,33 @@ elif page == "📊 Dashboard":
             errors="coerce"
         ).fillna(0.0)
 
-        closed["profitto_cumulato"] = closed["profit"].cumsum().round(2)
+        closed["profitto_cumulato"] = (
+            closed["profit"].cumsum().round(2)
+        )
 
-        # Numero progressivo della giocata
         closed["Giocata"] = range(1, len(closed) + 1)
 
-        # Linea di tendenza del profitto cumulato
-        x = closed["Giocata"].to_numpy(dtype=float)
-        y = closed["profitto_cumulato"].to_numpy(dtype=float)
-
-        if len(closed) >= 2:
-            coeff = np.polyfit(x, y, 1)
-            closed["Tendenza"] = np.polyval(coeff, x)
-        else:
-            closed["Tendenza"] = closed["profitto_cumulato"]
+        # Media cumulativa della curva del profitto:
+        # ogni punto è la media di tutti i punti del profitto cumulato
+        # fino a quella giocata.
+        closed["Media cumulativa"] = (
+            closed["profitto_cumulato"]
+            .expanding()
+            .mean()
+            .round(2)
+        )
 
         st.markdown("### 📈 Andamento profitto cumulato")
 
         st.line_chart(
             closed.set_index("Giocata")[
-                ["profitto_cumulato", "Tendenza"]
+                ["profitto_cumulato", "Media cumulativa"]
             ]
         )
 
-        ultimo_profitto = float(closed["profitto_cumulato"].iloc[-1])
+        ultimo_profitto = float(
+            closed["profitto_cumulato"].iloc[-1]
+        )
         profitto_dashboard = round(float(s["profit"]), 2)
 
         if round(ultimo_profitto, 2) != profitto_dashboard:
