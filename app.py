@@ -1301,7 +1301,7 @@ elif page == "📊 Dashboard":
             errors="coerce"
         ).fillna(0.0)
 
-                closed["profitto_cumulato"] = closed["profit"].cumsum().round(2)
+        closed["profitto_cumulato"] = closed["profit"].cumsum().round(2)
 
         # Numero progressivo della giocata
         closed["Giocata"] = range(1, len(closed) + 1)
