@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 import requests
 from supabase import create_client
 
-API_URL = "https://www.thesportsdb.com/api/v1/json/123/searchevents.php"
+SEARCH_API_URL = "https://www.thesportsdb.com/api/v1/json/123/searchevents.php"
+LOOKUP_API_URL = "https://www.thesportsdb.com/api/v1/json/123/lookupevent.php"
 STAKE = 20.0
 LOOKBACK_DAYS = 14
 REQUEST_DELAY = 2.1
@@ -110,6 +111,7 @@ def to_int(value):
 
 def convert_event(event):
     return {
+        "event_id": str(event.get("idEvent") or ""),
         "teams": {
             "home": {"name": event.get("strHomeTeam") or ""},
             "away": {"name": event.get("strAwayTeam") or ""},
@@ -139,7 +141,7 @@ def fetch_match(match):
 
     for q_home, q_away in queries:
         response = requests.get(
-            API_URL,
+            SEARCH_API_URL,
             params={"e": f"{q_home}_vs_{q_away}", "d": date_iso},
             timeout=30,
         )
@@ -157,6 +159,29 @@ def fetch_match(match):
         time.sleep(REQUEST_DELAY)
 
     return []
+
+
+def lookup_event(event_id):
+    if not event_id:
+        return None
+
+    time.sleep(REQUEST_DELAY)
+    response = requests.get(
+        LOOKUP_API_URL,
+        params={"id": event_id},
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    events = response.json().get("events") or []
+    if not events:
+        return None
+
+    event = events[0]
+    if str(event.get("strSport") or "").casefold() != "soccer":
+        return None
+
+    return convert_event(event)
 
 
 def candidate_score(db_match, fixture):
@@ -330,13 +355,61 @@ def main():
             time.sleep(REQUEST_DELAY)
             continue
 
-        if not finished(date_iso, fixture):
+        event_id = fixture.get("event_id") or ""
+        if not event_id:
             waiting += 1
-            print("  ⏳ non ancora conclusa / punteggio non disponibile")
+            print("  ⏳ idEvent mancante: non salvo il risultato.")
             time.sleep(REQUEST_DELAY)
             continue
 
-        hg, ag = fixture["goals"]["home"], fixture["goals"]["away"]
+        try:
+            verified_fixture = lookup_event(event_id)
+        except Exception as exc:
+            waiting += 1
+            print(f"  ⏳ verifica finale fallita: {exc}")
+            time.sleep(REQUEST_DELAY)
+            continue
+
+        if not verified_fixture:
+            waiting += 1
+            print("  ⏳ evento non disponibile nella verifica finale.")
+            time.sleep(REQUEST_DELAY)
+            continue
+
+        verified_total, verified_details = candidate_score(match, verified_fixture)
+        if (
+            verified_total < HIGH_CONFIDENCE
+            or verified_details["home_score"] < 0.68
+            or verified_details["away_score"] < 0.58
+        ):
+            uncertain += 1
+            print(
+                "  ✗ VERIFICA FINALE SCARTATA: "
+                f'confidenza={verified_total:.3f} | '
+                f'Casa={verified_details["home_score"]:.3f} | '
+                f'Trasferta={verified_details["away_score"]:.3f}'
+            )
+            time.sleep(REQUEST_DELAY)
+            continue
+
+        if not finished(date_iso, verified_fixture):
+            waiting += 1
+            print(
+                "  ⏳ verifica finale: partita non conclusa "
+                "o punteggio definitivo non disponibile."
+            )
+            time.sleep(REQUEST_DELAY)
+            continue
+
+        hg = verified_fixture["goals"]["home"]
+        ag = verified_fixture["goals"]["away"]
+
+        print(
+            f'  ✓ VERIFICA FINALE idEvent={event_id}: '
+            f'{verified_details.get("api_home")} - '
+            f'{verified_details.get("api_away")} = {hg}-{ag}'
+        )
+
         outcome = determine_outcome(match.get("pick"), hg, ag)
         if not outcome:
             uncertain += 1
@@ -362,7 +435,7 @@ def main():
 
     print(
         f"Completato: {updated} aggiornate, "
-        f"{waiting} non terminate, "
+        f"{waiting} non terminate/non verificate, "
         f"{uncertain} non trovate/abbinate con sicurezza."
     )
 
