@@ -5,7 +5,8 @@ import os
 import sqlite3
 import time
 import math
-from datetime import datetime
+import hashlib
+from datetime import datetime, timezone
 from itertools import combinations
 
 import pandas as pd
@@ -939,6 +940,199 @@ def automatic_strategy_search(
     return table, selections
 
 
+STRATEGY_HISTORY_TABLE = "strategy_history"
+
+
+def strategy_ranking_signature(ranking):
+    if ranking is None or ranking.empty:
+        return ""
+
+    cols = ["Strategia", "Partite", "ROI %", "Profitto €", "Punteggio"]
+    available = [c for c in cols if c in ranking.columns]
+    compact = ranking[available].fillna("").astype(str)
+
+    raw = "\n".join(
+        "|".join(row)
+        for row in compact.to_numpy().tolist()
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def save_strategy_snapshot(ranking):
+    if not use_supabase():
+        return {
+            "ok": False,
+            "saved": False,
+            "message": "Storico disponibile solo con Supabase.",
+        }
+
+    if ranking is None or ranking.empty:
+        return {
+            "ok": True,
+            "saved": False,
+            "message": "Classifica vuota: nessuno snapshot salvato.",
+        }
+
+    client = supabase_client()
+    signature = strategy_ranking_signature(ranking)
+
+    try:
+        previous = (
+            client.table(STRATEGY_HISTORY_TABLE)
+            .select("signature")
+            .order("captured_at", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "saved": False,
+            "message": f"Tabella storico non disponibile. Dettaglio: {exc}",
+        }
+
+    if previous and previous[0].get("signature") == signature:
+        return {
+            "ok": True,
+            "saved": False,
+            "message": "Classifica invariata: snapshot non duplicato.",
+        }
+
+    captured_at = datetime.now(timezone.utc).isoformat()
+    snapshot_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+
+    rows = []
+    for position, (_, row) in enumerate(ranking.iterrows(), start=1):
+        rows.append({
+            "snapshot_id": snapshot_id,
+            "captured_at": captured_at,
+            "signature": signature,
+            "rank_position": position,
+            "strategy": str(row.get("Strategia", "")),
+            "matches_count": int(row.get("Partite", 0) or 0),
+            "roi": float(row.get("ROI %", 0) or 0),
+            "profit": float(row.get("Profitto €", 0) or 0),
+            "score": float(row.get("Punteggio", 0) or 0),
+        })
+
+    try:
+        client.table(STRATEGY_HISTORY_TABLE).insert(rows).execute()
+    except Exception as exc:
+        return {
+            "ok": False,
+            "saved": False,
+            "message": f"Errore salvataggio storico: {exc}",
+        }
+
+    return {
+        "ok": True,
+        "saved": True,
+        "message": f"Nuovo snapshot salvato: {len(rows)} strategie.",
+    }
+
+
+def strategy_history_summary(current_strategies=None):
+    if not use_supabase():
+        return pd.DataFrame(), 0
+
+    try:
+        rows = (
+            supabase_client()
+            .table(STRATEGY_HISTORY_TABLE)
+            .select(
+                "snapshot_id,captured_at,rank_position,"
+                "strategy,matches_count,roi,profit,score"
+            )
+            .order("captured_at")
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return pd.DataFrame(), 0
+
+    if not rows:
+        return pd.DataFrame(), 0
+
+    hist = pd.DataFrame(rows)
+    hist["captured_at"] = pd.to_datetime(
+        hist["captured_at"], errors="coerce", utc=True
+    )
+    for col in ["rank_position", "matches_count", "roi", "profit", "score"]:
+        hist[col] = pd.to_numeric(hist[col], errors="coerce")
+
+    snapshot_meta = (
+        hist[["snapshot_id", "captured_at"]]
+        .drop_duplicates("snapshot_id")
+        .sort_values("captured_at")
+        .reset_index(drop=True)
+    )
+    total_snapshots = len(snapshot_meta)
+
+    if current_strategies:
+        wanted = set(str(x) for x in current_strategies)
+        strategies = [
+            s for s in hist["strategy"].dropna().astype(str).unique()
+            if s in wanted
+        ]
+    else:
+        strategies = list(hist["strategy"].dropna().astype(str).unique())
+
+    output = []
+
+    for strategy in strategies:
+        sdf = hist[hist["strategy"].astype(str) == strategy].copy()
+        if sdf.empty:
+            continue
+
+        first_seen = sdf["captured_at"].min()
+        eligible = snapshot_meta[snapshot_meta["captured_at"] >= first_seen]
+        denominator = max(1, len(eligible))
+
+        appearances = int(sdf["snapshot_id"].nunique())
+        top5 = int(
+            sdf.loc[sdf["rank_position"] <= 5, "snapshot_id"].nunique()
+        )
+        top10 = int(
+            sdf.loc[sdf["rank_position"] <= 10, "snapshot_id"].nunique()
+        )
+
+        latest = sdf.sort_values("captured_at").iloc[-1]
+
+        output.append({
+            "Strategia": strategy,
+            "Rilevazioni": appearances,
+            "Top 5 %": round(top5 / denominator * 100, 1),
+            "Top 10 %": round(top10 / denominator * 100, 1),
+            "Posizione media": round(float(sdf["rank_position"].mean()), 2),
+            "Ultima posizione": int(latest["rank_position"]),
+            "Ultimo campione": int(
+                latest["matches_count"]
+                if pd.notna(latest["matches_count"]) else 0
+            ),
+            "Ultimo ROI %": round(
+                float(latest["roi"]) if pd.notna(latest["roi"]) else 0.0,
+                2,
+            ),
+            "Ultimo punteggio": round(
+                float(latest["score"]) if pd.notna(latest["score"]) else 0.0,
+                2,
+            ),
+        })
+
+    if not output:
+        return pd.DataFrame(), total_snapshots
+
+    result = pd.DataFrame(output).sort_values(
+        ["Top 5 %", "Top 10 %", "Posizione media", "Rilevazioni"],
+        ascending=[False, False, True, False],
+    ).reset_index(drop=True)
+
+    return result, total_snapshots
+
+
 def editor_form(data, prefix):
     left, right = st.columns(2)
     with left:
@@ -1572,6 +1766,9 @@ elif page == "🧠 Trova metodo migliore":
                 st.session_state["strategy_ranking_v2"] = ranking
                 st.session_state["strategy_selections_v2"] = selections
 
+                history_result = save_strategy_snapshot(ranking)
+                st.session_state["strategy_history_result"] = history_result
+
         ranking = st.session_state.get("strategy_ranking_v2")
         selections = st.session_state.get("strategy_selections_v2", {})
 
@@ -1599,6 +1796,51 @@ elif page == "🧠 Trova metodo migliore":
                 "a giocare tutte le partite. Stabilità controlla il rendimento in "
                 "3 blocchi cronologici separati."
             )
+
+            history_result = st.session_state.get("strategy_history_result")
+
+            if isinstance(history_result, dict):
+                if not history_result.get("ok"):
+                    st.warning(
+                        "📚 Storico classifica non ancora attivo: "
+                        + history_result.get("message", "")
+                    )
+                elif history_result.get("saved"):
+                    st.success("📚 " + history_result.get("message", ""))
+
+            history_table, snapshot_count = strategy_history_summary(
+                ranking["Strategia"].tolist()
+            )
+
+            st.markdown("### 🧭 Stabilità della classifica")
+
+            if snapshot_count == 0:
+                st.info(
+                    "Lo storico partirà dal primo snapshot salvato. "
+                    "Dopo alcuni cambiamenti della classifica inizierai "
+                    "a vedere quali strategie rimangono davvero in alto."
+                )
+            else:
+                st.caption(
+                    f"Snapshot distinti salvati: {snapshot_count}. "
+                    "Top 5 % indica in quanti snapshot, dalla prima "
+                    "comparsa della strategia, è rimasta nelle prime 5. "
+                    "La classifica viene salvata solo quando cambia, "
+                    "quindi premere il tasto più volte non altera i dati."
+                )
+
+                if snapshot_count < 5:
+                    st.warning(
+                        "Lo storico è ancora molto giovane: con meno "
+                        "di 5 snapshot le percentuali sono solo indicative."
+                    )
+
+                if not history_table.empty:
+                    st.dataframe(
+                        history_table.head(20),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
             st.markdown("### 🔎 Apri una strategia")
             strategy_map = {
