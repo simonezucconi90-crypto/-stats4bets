@@ -1596,6 +1596,45 @@ elif page == "🧪 Laboratorio Strategie":
             qra = c8.multiselect("QRA/QA", opts("qra_qa"))
             qi = c9.multiselect("QI/QA", opts("qi_qa"))
 
+            st.markdown("#### Numero comparazioni C. AFF.")
+
+            caff_count_values = pd.to_numeric(
+                closed["c_aff_count"],
+                errors="coerce"
+            ).dropna()
+
+            use_caff_count = st.checkbox(
+                "Usa filtro C.AFF. COUNT",
+                value=False,
+                key="lab_use_caff_count",
+            )
+
+            if caff_count_values.empty:
+                st.info(
+                    "Nel database non ci sono ancora valori C.AFF. COUNT "
+                    "utilizzabili per le partite concluse."
+                )
+                min_caff_count = 0
+                max_caff_count = 0
+            else:
+                cc1, cc2 = st.columns(2)
+
+                min_caff_count = cc1.number_input(
+                    "C.AFF. COUNT minimo",
+                    min_value=0,
+                    value=int(caff_count_values.min()),
+                    step=1,
+                    key="lab_caff_count_min",
+                )
+
+                max_caff_count = cc2.number_input(
+                    "C.AFF. COUNT massimo",
+                    min_value=0,
+                    value=int(caff_count_values.max()),
+                    step=1,
+                    key="lab_caff_count_max",
+                )
+
         with tab2:
             odds = pd.to_numeric(closed["current_odds"], errors="coerce").dropna()
             probs = pd.to_numeric(closed["prob_1"], errors="coerce").dropna()
@@ -1627,6 +1666,18 @@ elif page == "🧪 Laboratorio Strategie":
         filtered = apply_strategy_filters(
             closed, filters, min_odds, max_odds, min_prob, max_prob
         )
+
+        if use_caff_count and not caff_count_values.empty:
+            caff_count_numeric = pd.to_numeric(
+                filtered["c_aff_count"],
+                errors="coerce"
+            )
+
+            filtered = filtered[
+                (caff_count_numeric >= min_caff_count)
+                & (caff_count_numeric <= max_caff_count)
+            ]
+
         s = summary(filtered)
 
         st.markdown("### Risultato")
@@ -1653,12 +1704,20 @@ elif page == "🧪 Laboratorio Strategie":
 
             shown = detail[[
                 "date", "time", "league", "match_name", "Quota", "Prob. 1",
+                "c_aff", "c_aff_count",
                 "allibramento_color", "mtr", "scl", "cal", "Esito",
                 "final_score", "Profitto €"
             ]].rename(columns={
-                "date": "Data", "time": "Ora", "league": "Campionato",
-                "match_name": "Partita", "allibramento_color": "ALLB",
-                "mtr": "MTR", "scl": "SCL", "cal": "CAL",
+                "date": "Data",
+                "time": "Ora",
+                "league": "Campionato",
+                "match_name": "Partita",
+                "c_aff": "C.AFF.",
+                "c_aff_count": "C.AFF. COUNT",
+                "allibramento_color": "ALLB",
+                "mtr": "MTR",
+                "scl": "SCL",
+                "cal": "CAL",
                 "final_score": "Risultato"
             })
 
