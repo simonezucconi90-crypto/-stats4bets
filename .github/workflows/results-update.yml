@@ -1,36 +1,29 @@
-name: Stats4Bets Aggiorna Risultati e Profitti
+name: Aggiorna risultati e profitti
 
-"on":
-  workflow_dispatch: {}
-
-permissions:
-  contents: read
-
-concurrency:
-  group: stats4bets-results-update
-  cancel-in-progress: true
+on:
+  workflow_dispatch:
 
 jobs:
   update-results:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 8
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Scarica repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configura Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
 
       - name: Installa dipendenze
-        run: pip install -r requirements-results.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests supabase
 
-      - name: Aggiorna risultati e profitti
+      - name: Aggiorna risultati
         env:
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          FOOTBALLDATA_IO_KEY: ${{ secrets.FOOTBALLDATA_IO_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python update_results.py
