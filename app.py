@@ -1133,6 +1133,81 @@ def strategy_history_summary(current_strategies=None):
     return result, total_snapshots
 
 
+
+def definitive_strategy_ranking(ranking, history_table, snapshot_count):
+    if ranking is None or ranking.empty:
+        return pd.DataFrame()
+
+    current = ranking.copy()
+
+    def norm(series, higher_is_better=True):
+        s = pd.to_numeric(series, errors="coerce")
+        if s.notna().sum() == 0:
+            return pd.Series(50.0, index=series.index)
+        lo, hi = float(s.min()), float(s.max())
+        if math.isclose(lo, hi):
+            out = pd.Series(50.0, index=series.index)
+        else:
+            out = (s - lo) / (hi - lo) * 100.0
+        if not higher_is_better:
+            out = 100.0 - out
+        return out.fillna(0.0)
+
+    current["_score_now"] = norm(current["Punteggio"])
+    current["_sample"] = pd.to_numeric(current["Affidabilità campione %"], errors="coerce").fillna(0).clip(0,100)
+    current["_stability_now"] = pd.to_numeric(current["Stabilità %"], errors="coerce").fillna(0).clip(0,100)
+    current["_validation"] = current["Validata"].astype(str).map(lambda x: 100.0 if "✅" in x else 35.0)
+
+    if history_table is None or history_table.empty:
+        current["Rilevazioni"] = 0
+        current["Top 5 %"] = 0.0
+        current["Top 10 %"] = 0.0
+        current["Posizione media"] = np.nan
+        current["_history"] = 0.0
+    else:
+        hist = history_table[["Strategia","Rilevazioni","Top 5 %","Top 10 %","Posizione media"]].copy()
+        current = current.merge(hist, on="Strategia", how="left")
+        current["Rilevazioni"] = pd.to_numeric(current["Rilevazioni"], errors="coerce").fillna(0).astype(int)
+        current["Top 5 %"] = pd.to_numeric(current["Top 5 %"], errors="coerce").fillna(0.0)
+        current["Top 10 %"] = pd.to_numeric(current["Top 10 %"], errors="coerce").fillna(0.0)
+        pos_component = norm(current["Posizione media"], higher_is_better=False)
+        obs_component = current["Rilevazioni"].clip(upper=10) / 10.0 * 100.0
+        current["_history"] = current["Top 5 %"]*0.40 + current["Top 10 %"]*0.20 + pos_component*0.20 + obs_component*0.20
+
+    maturity = min(1.0, max(0, snapshot_count) / 10.0)
+    history_weight = 0.35 * maturity
+    current_weight = 1.0 - history_weight
+
+    current["_current_quality"] = (
+        current["_score_now"]*0.45 +
+        current["_sample"]*0.20 +
+        current["_stability_now"]*0.20 +
+        current["_validation"]*0.15
+    )
+    current["Punteggio definitivo"] = (
+        current["_current_quality"]*current_weight +
+        current["_history"]*history_weight
+    ).round(2)
+
+    def state(row):
+        obs = int(row.get("Rilevazioni",0) or 0)
+        sample = int(row.get("Partite",0) or 0)
+        validated = "✅" in str(row.get("Validata",""))
+        if snapshot_count < 3 or obs < 3 or sample < 30:
+            return "🔴 Provvisoria"
+        if obs < 5 or sample < 50:
+            return "🟠 In consolidamento"
+        if obs < 10 or sample < 100 or not validated:
+            return "🟡 Stabile"
+        return "🟢 Molto stabile"
+
+    current["Stato"] = current.apply(state, axis=1)
+    current = current.sort_values(["Punteggio definitivo","Punteggio","Partite"], ascending=[False,False,False]).reset_index(drop=True)
+    current.insert(0,"Posizione",range(1,len(current)+1))
+    keep = ["Posizione","Strategia","Stato","Punteggio definitivo","Partite","Vinte","Perse","Win rate %","Quota media","Profitto €","ROI %","Validata","Stabilità %","Rilevazioni","Top 5 %","Top 10 %","Posizione media"]
+    return current[[c for c in keep if c in current.columns]]
+
+
 def editor_form(data, prefix):
     left, right = st.columns(2)
     with left:
@@ -1899,6 +1974,30 @@ elif page == "🧠 Trova metodo migliore":
                         history_table.head(20),
                         use_container_width=True,
                         hide_index=True,
+                    )
+
+            st.markdown("### 🏆 Classifica Definitiva")
+            st.caption(
+                "Questa è la classifica da guardare: combina automaticamente rendimento attuale, "
+                "campione, validazione, stabilità e storico. Il peso dello storico aumenta "
+                "automaticamente man mano che crescono le rilevazioni."
+            )
+
+            definitive = definitive_strategy_ranking(ranking, history_table, snapshot_count)
+
+            if not definitive.empty:
+                winner = definitive.iloc[0]
+                st.success(
+                    f'🥇 Strategia consigliata adesso: {winner["Strategia"]} '
+                    f'— punteggio definitivo {winner["Punteggio definitivo"]:.2f} '
+                    f'— {winner["Stato"]}'
+                )
+                st.dataframe(definitive, use_container_width=True, hide_index=True)
+
+                if snapshot_count < 5:
+                    st.info(
+                        "La prima posizione è già calcolata automaticamente, ma lo storico è ancora giovane. "
+                        "Il peso della stabilità crescerà automaticamente fino a 10 snapshot."
                     )
 
             st.markdown("### 🔎 Apri una strategia")
