@@ -1134,29 +1134,53 @@ def strategy_history_summary(current_strategies=None):
 
 
 
-def definitive_strategy_ranking(ranking, history_table, snapshot_count):
+def definitive_strategy_ranking(ranking, history_table, snapshot_count, selections=None):
+    """
+    Classifica definitiva con rimozione automatica delle strategie equivalenti.
+
+    Due strategie sono considerate duplicate quando selezionano ESATTAMENTE
+    le stesse partite. In quel caso viene tenuta una sola riga:
+    - prima si preferisce la strategia con meno filtri, quindi più semplice;
+    - a parità di complessità si tiene quella con punteggio definitivo migliore.
+    """
     if ranking is None or ranking.empty:
         return pd.DataFrame()
 
+    selections = selections or {}
     current = ranking.copy()
 
     def norm(series, higher_is_better=True):
         s = pd.to_numeric(series, errors="coerce")
         if s.notna().sum() == 0:
             return pd.Series(50.0, index=series.index)
-        lo, hi = float(s.min()), float(s.max())
+
+        lo = float(s.min())
+        hi = float(s.max())
+
         if math.isclose(lo, hi):
             out = pd.Series(50.0, index=series.index)
         else:
             out = (s - lo) / (hi - lo) * 100.0
+
         if not higher_is_better:
             out = 100.0 - out
+
         return out.fillna(0.0)
 
     current["_score_now"] = norm(current["Punteggio"])
-    current["_sample"] = pd.to_numeric(current["Affidabilità campione %"], errors="coerce").fillna(0).clip(0,100)
-    current["_stability_now"] = pd.to_numeric(current["Stabilità %"], errors="coerce").fillna(0).clip(0,100)
-    current["_validation"] = current["Validata"].astype(str).map(lambda x: 100.0 if "✅" in x else 35.0)
+    current["_sample"] = pd.to_numeric(
+        current["Affidabilità campione %"],
+        errors="coerce",
+    ).fillna(0).clip(0, 100)
+
+    current["_stability_now"] = pd.to_numeric(
+        current["Stabilità %"],
+        errors="coerce",
+    ).fillna(0).clip(0, 100)
+
+    current["_validation"] = current["Validata"].astype(str).map(
+        lambda x: 100.0 if "✅" in x else 35.0
+    )
 
     if history_table is None or history_table.empty:
         current["Rilevazioni"] = 0
@@ -1165,47 +1189,236 @@ def definitive_strategy_ranking(ranking, history_table, snapshot_count):
         current["Posizione media"] = np.nan
         current["_history"] = 0.0
     else:
-        hist = history_table[["Strategia","Rilevazioni","Top 5 %","Top 10 %","Posizione media"]].copy()
-        current = current.merge(hist, on="Strategia", how="left")
-        current["Rilevazioni"] = pd.to_numeric(current["Rilevazioni"], errors="coerce").fillna(0).astype(int)
-        current["Top 5 %"] = pd.to_numeric(current["Top 5 %"], errors="coerce").fillna(0.0)
-        current["Top 10 %"] = pd.to_numeric(current["Top 10 %"], errors="coerce").fillna(0.0)
-        pos_component = norm(current["Posizione media"], higher_is_better=False)
-        obs_component = current["Rilevazioni"].clip(upper=10) / 10.0 * 100.0
-        current["_history"] = current["Top 5 %"]*0.40 + current["Top 10 %"]*0.20 + pos_component*0.20 + obs_component*0.20
+        hist = history_table[
+            [
+                "Strategia",
+                "Rilevazioni",
+                "Top 5 %",
+                "Top 10 %",
+                "Posizione media",
+            ]
+        ].copy()
 
-    maturity = min(1.0, max(0, snapshot_count) / 10.0)
+        current = current.merge(
+            hist,
+            on="Strategia",
+            how="left",
+        )
+
+        current["Rilevazioni"] = pd.to_numeric(
+            current["Rilevazioni"],
+            errors="coerce",
+        ).fillna(0).astype(int)
+
+        current["Top 5 %"] = pd.to_numeric(
+            current["Top 5 %"],
+            errors="coerce",
+        ).fillna(0.0)
+
+        current["Top 10 %"] = pd.to_numeric(
+            current["Top 10 %"],
+            errors="coerce",
+        ).fillna(0.0)
+
+        pos_component = norm(
+            current["Posizione media"],
+            higher_is_better=False,
+        )
+
+        obs_component = (
+            current["Rilevazioni"].clip(upper=10)
+            / 10.0
+            * 100.0
+        )
+
+        current["_history"] = (
+            current["Top 5 %"] * 0.40
+            + current["Top 10 %"] * 0.20
+            + pos_component * 0.20
+            + obs_component * 0.20
+        )
+
+    maturity = min(
+        1.0,
+        max(0, snapshot_count) / 10.0,
+    )
     history_weight = 0.35 * maturity
     current_weight = 1.0 - history_weight
 
     current["_current_quality"] = (
-        current["_score_now"]*0.45 +
-        current["_sample"]*0.20 +
-        current["_stability_now"]*0.20 +
-        current["_validation"]*0.15
+        current["_score_now"] * 0.45
+        + current["_sample"] * 0.20
+        + current["_stability_now"] * 0.20
+        + current["_validation"] * 0.15
     )
+
     current["Punteggio definitivo"] = (
-        current["_current_quality"]*current_weight +
-        current["_history"]*history_weight
+        current["_current_quality"] * current_weight
+        + current["_history"] * history_weight
     ).round(2)
 
     def state(row):
-        obs = int(row.get("Rilevazioni",0) or 0)
-        sample = int(row.get("Partite",0) or 0)
-        validated = "✅" in str(row.get("Validata",""))
+        obs = int(row.get("Rilevazioni", 0) or 0)
+        sample = int(row.get("Partite", 0) or 0)
+        validated = "✅" in str(row.get("Validata", ""))
+
         if snapshot_count < 3 or obs < 3 or sample < 30:
             return "🔴 Provvisoria"
+
         if obs < 5 or sample < 50:
             return "🟠 In consolidamento"
+
         if obs < 10 or sample < 100 or not validated:
             return "🟡 Stabile"
+
         return "🟢 Molto stabile"
 
-    current["Stato"] = current.apply(state, axis=1)
-    current = current.sort_values(["Punteggio definitivo","Punteggio","Partite"], ascending=[False,False,False]).reset_index(drop=True)
-    current.insert(0,"Posizione",range(1,len(current)+1))
-    keep = ["Posizione","Strategia","Stato","Punteggio definitivo","Partite","Vinte","Perse","Win rate %","Quota media","Profitto €","ROI %","Validata","Stabilità %","Rilevazioni","Top 5 %","Top 10 %","Posizione media"]
-    return current[[c for c in keep if c in current.columns]]
+    current["Stato"] = current.apply(
+        state,
+        axis=1,
+    )
+
+    # ---------------------------------------------------------
+    # RIMOZIONE STRATEGIE EQUIVALENTI
+    # ---------------------------------------------------------
+    # La firma è basata sugli indici reali delle partite selezionate.
+    # Se due strategie hanno la stessa firma, stanno scegliendo
+    # esattamente le stesse partite e quindi una delle due è ridondante.
+    def selection_signature(strategy_id):
+        selected = selections.get(
+            str(strategy_id),
+            selections.get(strategy_id, []),
+        )
+
+        if selected is None:
+            selected = []
+
+        normalized = sorted(
+            {str(value) for value in selected}
+        )
+
+        if not normalized:
+            # Se per qualche motivo non abbiamo gli indici,
+            # NON uniamo la strategia ad altre.
+            return f"UNIQUE::{strategy_id}"
+
+        raw = "|".join(normalized)
+        return hashlib.sha256(
+            raw.encode("utf-8")
+        ).hexdigest()
+
+    current["_selection_signature"] = current["ID"].map(
+        selection_signature
+    )
+
+    # Numero di filtri della strategia.
+    # Esempio:
+    # C.AFF.=VE -> 1
+    # C.AFF.=VE + Quota 1.20-1.70 -> 2
+    current["_filter_count"] = (
+        current["Strategia"]
+        .fillna("")
+        .astype(str)
+        .map(
+            lambda value:
+            0
+            if not value.strip()
+            else len(
+                [
+                    part
+                    for part in value.split(" + ")
+                    if part.strip()
+                ]
+            )
+        )
+    )
+
+    current["_strategy_length"] = (
+        current["Strategia"]
+        .fillna("")
+        .astype(str)
+        .str.len()
+    )
+
+    group_sizes = (
+        current.groupby(
+            "_selection_signature"
+        )["_selection_signature"]
+        .transform("size")
+    )
+
+    current["Duplicati rimossi"] = (
+        group_sizes - 1
+    ).astype(int)
+
+    # Dentro ogni gruppo equivalente teniamo prima la regola più semplice.
+    # A parità di numero di filtri scegliamo quella col punteggio migliore.
+    current = current.sort_values(
+        [
+            "_selection_signature",
+            "_filter_count",
+            "Punteggio definitivo",
+            "Punteggio",
+            "_strategy_length",
+        ],
+        ascending=[
+            True,
+            True,
+            False,
+            False,
+            True,
+        ],
+    )
+
+    current = current.drop_duplicates(
+        subset=["_selection_signature"],
+        keep="first",
+    ).copy()
+
+    # Solo dopo aver tolto i duplicati rifacciamo la classifica finale.
+    current = current.sort_values(
+        [
+            "Punteggio definitivo",
+            "Punteggio",
+            "Partite",
+        ],
+        ascending=[
+            False,
+            False,
+            False,
+        ],
+    ).reset_index(drop=True)
+
+    current.insert(
+        0,
+        "Posizione",
+        range(1, len(current) + 1),
+    )
+
+    keep = [
+        "Posizione",
+        "Strategia",
+        "Stato",
+        "Punteggio definitivo",
+        "Partite",
+        "Vinte",
+        "Perse",
+        "Win rate %",
+        "Quota media",
+        "Profitto €",
+        "ROI %",
+        "Validata",
+        "Stabilità %",
+        "Rilevazioni",
+        "Top 5 %",
+        "Top 10 %",
+        "Posizione media",
+        "Duplicati rimossi",
+    ]
+
+    return current[
+        [c for c in keep if c in current.columns]
+    ]
 
 
 def editor_form(data, prefix):
@@ -1983,7 +2196,12 @@ elif page == "🧠 Trova metodo migliore":
                 "automaticamente man mano che crescono le rilevazioni."
             )
 
-            definitive = definitive_strategy_ranking(ranking, history_table, snapshot_count)
+            definitive = definitive_strategy_ranking(
+                ranking,
+                history_table,
+                snapshot_count,
+                selections,
+            )
 
             if not definitive.empty:
                 winner = definitive.iloc[0]
@@ -1992,7 +2210,25 @@ elif page == "🧠 Trova metodo migliore":
                     f'— punteggio definitivo {winner["Punteggio definitivo"]:.2f} '
                     f'— {winner["Stato"]}'
                 )
-                st.dataframe(definitive, use_container_width=True, hide_index=True)
+                duplicates_removed = int(
+                    pd.to_numeric(
+                        definitive["Duplicati rimossi"],
+                        errors="coerce",
+                    ).fillna(0).sum()
+                ) if "Duplicati rimossi" in definitive.columns else 0
+
+                if duplicates_removed > 0:
+                    st.caption(
+                        f"🧹 Strategie equivalenti eliminate automaticamente: "
+                        f"{duplicates_removed}. Ogni riga rimasta seleziona "
+                        f"un gruppo realmente diverso di partite."
+                    )
+
+                st.dataframe(
+                    definitive,
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
                 if snapshot_count < 5:
                     st.info(
