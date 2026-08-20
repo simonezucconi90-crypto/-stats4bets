@@ -1691,6 +1691,469 @@ def strategy_follow_display_row(definitive, state):
     })
 
 
+
+ELITE_MIN_MATCHES = 80
+ELITE_MIN_OBSERVATIONS = 5
+ELITE_RECENT_WINDOW = 50
+ELITE_MAX_ROWS = 12
+
+
+def recent_strategy_statistics(df, window=ELITE_RECENT_WINDOW):
+    if df is None or df.empty:
+        return {
+            "recent_matches": 0,
+            "recent_profit": 0.0,
+            "recent_roi": 0.0,
+            "recent_win_rate": 0.0,
+            "recent_max_losing_streak": 0,
+        }
+
+    ordered = (
+        df[df["outcome"].isin(["V", "P"])]
+        .sort_values(["date", "time", "id"])
+        .tail(window)
+        .copy()
+    )
+
+    if ordered.empty:
+        return {
+            "recent_matches": 0,
+            "recent_profit": 0.0,
+            "recent_roi": 0.0,
+            "recent_win_rate": 0.0,
+            "recent_max_losing_streak": 0,
+        }
+
+    s = strategy_statistics(ordered)
+
+    return {
+        "recent_matches": s["closed"],
+        "recent_profit": s["profit"],
+        "recent_roi": s["roi"],
+        "recent_win_rate": s["win_rate"],
+        "recent_max_losing_streak": s["max_losing_streak"],
+    }
+
+
+def build_elite_ranking(
+    ranking,
+    history_table,
+    snapshot_count,
+    selections,
+    closed,
+    official_state=None,
+):
+    """
+    Crea la classifica decisionale principale.
+
+    Regole:
+    - esclude le strategie provvisorie;
+    - richiede campione minimo, storico minimo e validazione positiva;
+    - rimuove strategie equivalenti che scelgono le stesse partite;
+    - confronta rendimento totale e ultime 50 partite;
+    - penalizza perdita di stabilità e serie negative;
+    - mantiene sempre visibile la strategia ufficiale, anche se oggi
+      non sarebbe entrata nella Top Elite.
+    """
+    if ranking is None or ranking.empty:
+        return pd.DataFrame()
+
+    selections = selections or {}
+
+    # Partiamo dalla classifica definitiva già depurata dai duplicati.
+    definitive = definitive_strategy_ranking(
+        ranking,
+        history_table,
+        snapshot_count,
+        selections,
+    )
+
+    if definitive is None or definitive.empty:
+        return pd.DataFrame()
+
+    # Mappa nome strategia -> ID della classifica corrente.
+    strategy_to_id = {}
+    for _, row in ranking.iterrows():
+        strategy_to_id[str(row.get("Strategia", ""))] = str(
+            row.get("ID", "")
+        )
+
+    # Aggiungiamo metriche mancanti dal ranking originario.
+    original_cols = [
+        "Strategia",
+        "Max perdite consecutive",
+        "Peggior ROI blocco %",
+        "ROI ricerca %",
+        "ROI verifica %",
+        "Punteggio",
+        "Affidabilità campione %",
+    ]
+    available = [c for c in original_cols if c in ranking.columns]
+
+    extras = ranking[available].copy()
+
+    elite = definitive.merge(
+        extras,
+        on="Strategia",
+        how="left",
+    )
+
+    # Calcolo recente sulle ultime 50 partite DI QUELLA strategia.
+    recent_rows = []
+
+    for _, row in elite.iterrows():
+        strategy_name = str(row.get("Strategia", ""))
+        sid = strategy_to_id.get(strategy_name, "")
+        selected_indices = selections.get(sid, [])
+
+        if selected_indices:
+            sdf = closed.loc[
+                closed.index.intersection(selected_indices)
+            ].copy()
+        else:
+            sdf = pd.DataFrame(columns=closed.columns)
+
+        rs = recent_strategy_statistics(
+            sdf,
+            ELITE_RECENT_WINDOW,
+        )
+
+        recent_rows.append({
+            "Strategia": strategy_name,
+            "Partite recenti": rs["recent_matches"],
+            "ROI ultime 50 %": round(rs["recent_roi"], 2),
+            "Profitto ultime 50 €": round(
+                rs["recent_profit"],
+                2,
+            ),
+            "Win rate ultime 50 %": round(
+                rs["recent_win_rate"],
+                2,
+            ),
+            "Max perdite ultime 50": int(
+                rs["recent_max_losing_streak"]
+            ),
+        })
+
+    recent_df = pd.DataFrame(recent_rows)
+
+    elite = elite.merge(
+        recent_df,
+        on="Strategia",
+        how="left",
+    )
+
+    # --------------------------------------------------------
+    # FILTRO ELITE
+    # --------------------------------------------------------
+    official_name = ""
+    if isinstance(official_state, dict):
+        official_name = str(
+            official_state.get("official") or ""
+        )
+
+    elite["_is_official"] = (
+        elite["Strategia"].astype(str) == official_name
+    )
+
+    elite["Partite"] = pd.to_numeric(
+        elite["Partite"],
+        errors="coerce",
+    ).fillna(0)
+
+    elite["Rilevazioni"] = pd.to_numeric(
+        elite["Rilevazioni"],
+        errors="coerce",
+    ).fillna(0)
+
+    elite["Stabilità %"] = pd.to_numeric(
+        elite["Stabilità %"],
+        errors="coerce",
+    ).fillna(0)
+
+    elite["ROI %"] = pd.to_numeric(
+        elite["ROI %"],
+        errors="coerce",
+    ).fillna(0)
+
+    elite["ROI ultime 50 %"] = pd.to_numeric(
+        elite["ROI ultime 50 %"],
+        errors="coerce",
+    ).fillna(0)
+
+    elite["Max perdite consecutive"] = pd.to_numeric(
+        elite.get(
+            "Max perdite consecutive",
+            pd.Series(0, index=elite.index),
+        ),
+        errors="coerce",
+    ).fillna(0)
+
+    elite["Peggior ROI blocco %"] = pd.to_numeric(
+        elite.get(
+            "Peggior ROI blocco %",
+            pd.Series(0, index=elite.index),
+        ),
+        errors="coerce",
+    ).fillna(0)
+
+    validated_mask = elite["Validata"].astype(str).str.contains(
+        "✅",
+        regex=False,
+    )
+
+    eligible_mask = (
+        (elite["Partite"] >= ELITE_MIN_MATCHES)
+        & (elite["Rilevazioni"] >= ELITE_MIN_OBSERVATIONS)
+        & validated_mask
+        & (elite["Stabilità %"] >= 66.7)
+        & (~elite["Stato"].astype(str).str.contains("Provvisoria"))
+    )
+
+    # La strategia ufficiale rimane comunque nella schermata.
+    elite = elite[
+        eligible_mask | elite["_is_official"]
+    ].copy()
+
+    if elite.empty:
+        return pd.DataFrame()
+
+    # --------------------------------------------------------
+    # PUNTEGGIO ELITE
+    # --------------------------------------------------------
+    def normalize_0_100(series, higher_is_better=True):
+        s = pd.to_numeric(series, errors="coerce")
+        if s.notna().sum() == 0:
+            return pd.Series(
+                50.0,
+                index=series.index,
+            )
+
+        lo = float(s.min())
+        hi = float(s.max())
+
+        if math.isclose(lo, hi):
+            out = pd.Series(
+                50.0,
+                index=series.index,
+            )
+        else:
+            out = (s - lo) / (hi - lo) * 100.0
+
+        if not higher_is_better:
+            out = 100.0 - out
+
+        return out.fillna(0.0)
+
+    total_roi_component = normalize_0_100(
+        elite["ROI %"]
+    )
+
+    recent_roi_component = normalize_0_100(
+        elite["ROI ultime 50 %"]
+    )
+
+    sample_component = (
+        elite["Partite"].clip(upper=150)
+        / 150.0
+        * 100.0
+    )
+
+    observations_component = (
+        elite["Rilevazioni"].clip(upper=15)
+        / 15.0
+        * 100.0
+    )
+
+    top10_component = pd.to_numeric(
+        elite["Top 10 %"],
+        errors="coerce",
+    ).fillna(0).clip(0, 100)
+
+    stability_component = elite[
+        "Stabilità %"
+    ].clip(0, 100)
+
+    worst_block_component = normalize_0_100(
+        elite["Peggior ROI blocco %"]
+    )
+
+    streak_component = normalize_0_100(
+        elite["Max perdite consecutive"],
+        higher_is_better=False,
+    )
+
+    definitive_component = normalize_0_100(
+        elite["Punteggio definitivo"]
+    )
+
+    # Più peso alla solidità che al "colpo" del giorno.
+    elite["Punteggio Elite"] = (
+        definitive_component * 0.20
+        + total_roi_component * 0.15
+        + recent_roi_component * 0.20
+        + stability_component * 0.15
+        + observations_component * 0.10
+        + top10_component * 0.08
+        + sample_component * 0.05
+        + worst_block_component * 0.04
+        + streak_component * 0.03
+    ).round(2)
+
+    # Stato Elite più leggibile.
+    def elite_status(row):
+        if bool(row.get("_is_official", False)):
+            return "🎯 Ufficiale"
+
+        obs = int(row.get("Rilevazioni", 0) or 0)
+        matches = int(row.get("Partite", 0) or 0)
+        stability = float(
+            row.get("Stabilità %", 0) or 0
+        )
+        recent_roi = float(
+            row.get("ROI ultime 50 %", 0) or 0
+        )
+
+        if (
+            obs >= 10
+            and matches >= 100
+            and stability >= 100
+            and recent_roi > 0
+        ):
+            return "🟢 Elite forte"
+
+        if (
+            obs >= 8
+            and matches >= 90
+            and stability >= 66.7
+        ):
+            return "🟢 Elite"
+
+        return "🟡 Candidata Elite"
+
+    elite["Stato Elite"] = elite.apply(
+        elite_status,
+        axis=1,
+    )
+
+    elite = elite.sort_values(
+        [
+            "Punteggio Elite",
+            "_is_official",
+            "Rilevazioni",
+            "Partite",
+        ],
+        ascending=[
+            False,
+            False,
+            False,
+            False,
+        ],
+    ).reset_index(drop=True)
+
+    # Manteniamo poche righe utili.
+    if len(elite) > ELITE_MAX_ROWS:
+        top = elite.head(
+            ELITE_MAX_ROWS
+        ).copy()
+
+        # Se l'ufficiale non fosse nelle prime 12,
+        # la aggiungiamo comunque.
+        if (
+            official_name
+            and official_name
+            not in top["Strategia"].astype(str).tolist()
+        ):
+            official_rows = elite[
+                elite["Strategia"].astype(str)
+                == official_name
+            ]
+
+            if not official_rows.empty:
+                top = pd.concat(
+                    [
+                        top.head(ELITE_MAX_ROWS - 1),
+                        official_rows.head(1),
+                    ],
+                    ignore_index=True,
+                )
+
+        elite = top.copy()
+
+    elite = elite.sort_values(
+        [
+            "Punteggio Elite",
+            "_is_official",
+        ],
+        ascending=[
+            False,
+            False,
+        ],
+    ).reset_index(drop=True)
+
+    elite.insert(
+        0,
+        "Posizione Elite",
+        range(1, len(elite) + 1),
+    )
+
+    columns = [
+        "Posizione Elite",
+        "Strategia",
+        "Stato Elite",
+        "Punteggio Elite",
+        "Partite",
+        "Vinte",
+        "Perse",
+        "Win rate %",
+        "Quota media",
+        "Profitto €",
+        "ROI %",
+        "Partite recenti",
+        "ROI ultime 50 %",
+        "Profitto ultime 50 €",
+        "Win rate ultime 50 %",
+        "Stabilità %",
+        "Peggior ROI blocco %",
+        "Max perdite consecutive",
+        "Rilevazioni",
+        "Top 5 %",
+        "Top 10 %",
+        "Posizione media",
+        "Validata",
+    ]
+
+    return elite[
+        [c for c in columns if c in elite.columns]
+    ]
+
+
+def elite_decision_message(elite, official_state):
+    if elite is None or elite.empty:
+        return ""
+
+    best = elite.iloc[0]
+    official_name = ""
+
+    if isinstance(official_state, dict):
+        official_name = str(
+            official_state.get("official") or ""
+        )
+
+    if str(best.get("Strategia", "")) == official_name:
+        return (
+            "✅ La strategia ufficiale è anche la migliore "
+            "della Classifica Elite: nessun motivo per cambiare."
+        )
+
+    return (
+        f'🧪 Miglior alternativa Elite: '
+        f'{best.get("Strategia", "")}. '
+        f'Non cambia automaticamente la strategia ufficiale: '
+        f'deve superarla secondo le regole delle conferme consecutive.'
+    )
+
+
 def editor_form(data, prefix):
     left, right = st.columns(2)
     with left:
@@ -2390,7 +2853,7 @@ elif page == "🧠 Trova metodo migliore":
         selections = st.session_state.get("strategy_selections_v2", {})
 
         if isinstance(ranking, pd.DataFrame) and not ranking.empty:
-            st.markdown("### 🏆 Classifica")
+            st.markdown("### 🧪 Classifica completa del motore")
 
             display_ranking = ranking.drop(columns=["ID"]).copy()
             st.dataframe(
@@ -2573,6 +3036,62 @@ elif page == "🧠 Trova metodo migliore":
                         f"di almeno {CHALLENGER_MIN_SCORE_ADVANTAGE:.0f} punti "
                         f"per {CHALLENGER_REQUIRED_STREAK} rilevazioni consecutive."
                     )
+
+                st.markdown("### 🏆 Classifica Elite")
+                st.caption(
+                    "Questa è la classifica decisionale: mostra solo strategie "
+                    "già abbastanza solide. Le provvisorie sono escluse, i duplicati "
+                    "sono rimossi e il confronto recente usa le ultime "
+                    f"{ELITE_RECENT_WINDOW} partite di ciascuna strategia."
+                )
+
+                elite_table = build_elite_ranking(
+                    ranking=ranking,
+                    history_table=history_table,
+                    snapshot_count=snapshot_count,
+                    selections=selections,
+                    closed=closed,
+                    official_state=follow_state,
+                )
+
+                if elite_table.empty:
+                    st.info(
+                        "Nessuna strategia ha ancora tutti i requisiti Elite. "
+                        "La strategia ufficiale resta comunque monitorata."
+                    )
+                else:
+                    decision_message = elite_decision_message(
+                        elite_table,
+                        follow_state,
+                    )
+
+                    if decision_message.startswith("✅"):
+                        st.success(decision_message)
+                    else:
+                        st.info(decision_message)
+
+                    st.dataframe(
+                        elite_table,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    st.caption(
+                        f"Requisiti base Elite: almeno {ELITE_MIN_MATCHES} partite, "
+                        f"{ELITE_MIN_OBSERVATIONS} rilevazioni, validazione ✅ "
+                        "e stabilità almeno 66,7%. "
+                        f"Vengono mostrate al massimo {ELITE_MAX_ROWS} strategie."
+                    )
+
+            st.markdown("### 🧪 Laboratorio / dettagli")
+            with st.expander(
+                "Apri classifica completa, strategie provvisorie e dettagli",
+                expanded=False,
+            ):
+                st.caption(
+                    "Questa parte serve per ricerca e sperimentazione. "
+                    "Per decidere cosa seguire usa la Classifica Elite sopra."
+                )
 
             st.markdown("### 🔎 Apri una strategia")
             strategy_map = {
