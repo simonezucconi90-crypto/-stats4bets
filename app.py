@@ -1057,6 +1057,18 @@ def strategy_history_summary(current_strategies=None):
         return pd.DataFrame(), 0
 
     hist = pd.DataFrame(rows)
+
+    if "strategy" in hist.columns:
+        hist = hist[
+            ~hist["strategy"]
+            .fillna("")
+            .astype(str)
+            .str.startswith("__SYSTEM_STATE__")
+        ].copy()
+
+    if hist.empty:
+        return pd.DataFrame(), 0
+
     hist["captured_at"] = pd.to_datetime(
         hist["captured_at"], errors="coerce", utc=True
     )
@@ -1419,6 +1431,264 @@ def definitive_strategy_ranking(ranking, history_table, snapshot_count, selectio
     return current[
         [c for c in keep if c in current.columns]
     ]
+
+
+
+SYSTEM_STATE_PREFIX = "__SYSTEM_STATE__"
+CHALLENGER_REQUIRED_STREAK = 5
+CHALLENGER_MIN_SCORE_ADVANTAGE = 3.0
+
+
+def latest_real_strategy_snapshot_id():
+    if not use_supabase():
+        return ""
+    try:
+        rows = (
+            supabase_client()
+            .table(STRATEGY_HISTORY_TABLE)
+            .select("snapshot_id,captured_at,strategy")
+            .order("captured_at", desc=True)
+            .limit(500)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return ""
+    for row in rows:
+        strategy = str(row.get("strategy") or "")
+        if not strategy.startswith(SYSTEM_STATE_PREFIX):
+            return str(row.get("snapshot_id") or "")
+    return ""
+
+
+def load_strategy_follow_state():
+    if not use_supabase():
+        return None
+    try:
+        rows = (
+            supabase_client()
+            .table(STRATEGY_HISTORY_TABLE)
+            .select("strategy,captured_at")
+            .order("captured_at", desc=True)
+            .limit(500)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return None
+    for row in rows:
+        raw = str(row.get("strategy") or "")
+        if raw.startswith(SYSTEM_STATE_PREFIX):
+            try:
+                state = json.loads(raw[len(SYSTEM_STATE_PREFIX):])
+                if isinstance(state, dict):
+                    return state
+            except Exception:
+                pass
+    return None
+
+
+def save_strategy_follow_state(state):
+    if not use_supabase() or not isinstance(state, dict):
+        return False
+    payload = SYSTEM_STATE_PREFIX + json.dumps(
+        state, ensure_ascii=False, separators=(",", ":")
+    )
+    now = datetime.now(timezone.utc)
+    row = {
+        "snapshot_id": now.strftime("SYSTEM_%Y%m%dT%H%M%S%f"),
+        "captured_at": now.isoformat(),
+        "signature": "SYSTEM_STATE",
+        "rank_position": 0,
+        "strategy": payload,
+        "matches_count": int(state.get("official_matches", 0) or 0),
+        "roi": float(state.get("official_roi", 0) or 0),
+        "profit": float(state.get("official_profit", 0) or 0),
+        "score": float(state.get("official_score", 0) or 0),
+    }
+    try:
+        supabase_client().table(STRATEGY_HISTORY_TABLE).insert(row).execute()
+        return True
+    except Exception:
+        return False
+
+
+def _strategy_row_by_name(definitive, strategy_name):
+    if definitive is None or definitive.empty or not strategy_name:
+        return None
+    rows = definitive[
+        definitive["Strategia"].astype(str) == str(strategy_name)
+    ]
+    return None if rows.empty else rows.iloc[0]
+
+
+def _eligible_initial_official(row):
+    if row is None:
+        return False
+    return (
+        int(row.get("Partite", 0) or 0) >= 100
+        and int(row.get("Rilevazioni", 0) or 0) >= 10
+        and "✅" in str(row.get("Validata", ""))
+        and float(row.get("Stabilità %", 0) or 0) >= 66.7
+    )
+
+
+def _eligible_challenger(row):
+    if row is None:
+        return False
+    return (
+        int(row.get("Partite", 0) or 0) >= 80
+        and int(row.get("Rilevazioni", 0) or 0) >= 5
+        and "✅" in str(row.get("Validata", ""))
+        and float(row.get("Stabilità %", 0) or 0) >= 66.7
+    )
+
+
+def update_strategy_follow_state(definitive):
+    if definitive is None or definitive.empty:
+        return None, "Nessuna strategia disponibile."
+
+    latest_snapshot = latest_real_strategy_snapshot_id()
+    state = load_strategy_follow_state()
+
+    if not state:
+        eligible = definitive[
+            definitive.apply(_eligible_initial_official, axis=1)
+        ]
+        first = eligible.iloc[0] if not eligible.empty else definitive.iloc[0]
+        state = {
+            "official": str(first["Strategia"]),
+            "official_score": float(first.get("Punteggio definitivo", 0) or 0),
+            "official_matches": int(first.get("Partite", 0) or 0),
+            "official_roi": float(first.get("ROI %", 0) or 0),
+            "official_profit": float(first.get("Profitto €", 0) or 0),
+            "official_status": str(first.get("Stato", "")),
+            "official_consolidated": _eligible_initial_official(first),
+            "challenger": "",
+            "challenger_streak": 0,
+            "last_processed_snapshot": latest_snapshot,
+            "switch_count": 0,
+        }
+        save_strategy_follow_state(state)
+        msg = (
+            "Strategia ufficiale iniziale consolidata."
+            if state["official_consolidated"]
+            else "Strategia iniziale impostata, ma ancora in consolidamento."
+        )
+        return state, msg
+
+    official_name = str(state.get("official") or "")
+    official_row = _strategy_row_by_name(definitive, official_name)
+
+    if latest_snapshot and latest_snapshot == str(
+        state.get("last_processed_snapshot") or ""
+    ):
+        return state, "Nessun nuovo snapshot: stato invariato."
+
+    if official_row is not None:
+        state["official_score"] = float(
+            official_row.get("Punteggio definitivo", 0) or 0
+        )
+        state["official_matches"] = int(official_row.get("Partite", 0) or 0)
+        state["official_roi"] = float(official_row.get("ROI %", 0) or 0)
+        state["official_profit"] = float(official_row.get("Profitto €", 0) or 0)
+        state["official_status"] = str(official_row.get("Stato", ""))
+        if _eligible_initial_official(official_row):
+            state["official_consolidated"] = True
+
+    official_score = float(state.get("official_score", 0) or 0)
+
+    challengers = definitive[
+        definitive["Strategia"].astype(str) != official_name
+    ].copy()
+    if not challengers.empty:
+        challengers = challengers[
+            challengers.apply(_eligible_challenger, axis=1)
+        ]
+
+    if not challengers.empty:
+        challengers = challengers[
+            pd.to_numeric(
+                challengers["Punteggio definitivo"], errors="coerce"
+            ).fillna(0)
+            >= official_score + CHALLENGER_MIN_SCORE_ADVANTAGE
+        ]
+
+    if challengers.empty:
+        state["challenger"] = ""
+        state["challenger_streak"] = 0
+        state["last_processed_snapshot"] = latest_snapshot
+        save_strategy_follow_state(state)
+        return (
+            state,
+            "Nessuno sfidante supera abbastanza la strategia ufficiale: "
+            "continua con quella attuale.",
+        )
+
+    best = challengers.sort_values(
+        ["Punteggio definitivo", "Rilevazioni", "Partite"],
+        ascending=[False, False, False],
+    ).iloc[0]
+
+    challenger_name = str(best["Strategia"])
+
+    if challenger_name == str(state.get("challenger") or ""):
+        state["challenger_streak"] = int(
+            state.get("challenger_streak", 0) or 0
+        ) + 1
+    else:
+        state["challenger"] = challenger_name
+        state["challenger_streak"] = 1
+
+    state["last_processed_snapshot"] = latest_snapshot
+
+    if int(state["challenger_streak"]) >= CHALLENGER_REQUIRED_STREAK:
+        old_official = official_name
+        state["official"] = challenger_name
+        state["official_score"] = float(
+            best.get("Punteggio definitivo", 0) or 0
+        )
+        state["official_matches"] = int(best.get("Partite", 0) or 0)
+        state["official_roi"] = float(best.get("ROI %", 0) or 0)
+        state["official_profit"] = float(best.get("Profitto €", 0) or 0)
+        state["official_status"] = str(best.get("Stato", ""))
+        state["official_consolidated"] = _eligible_initial_official(best)
+        state["challenger"] = ""
+        state["challenger_streak"] = 0
+        state["switch_count"] = int(state.get("switch_count", 0) or 0) + 1
+        save_strategy_follow_state(state)
+        return (
+            state,
+            f"Cambio confermato: {old_official} → {challenger_name}. "
+            f"Lo sfidante è rimasto superiore per "
+            f"{CHALLENGER_REQUIRED_STREAK} rilevazioni consecutive.",
+        )
+
+    save_strategy_follow_state(state)
+    return (
+        state,
+        f"Sfidante in osservazione: {challenger_name} "
+        f"({state['challenger_streak']}/"
+        f"{CHALLENGER_REQUIRED_STREAK} conferme consecutive).",
+    )
+
+
+def strategy_follow_display_row(definitive, state):
+    if not state:
+        return None
+    row = _strategy_row_by_name(definitive, state.get("official"))
+    if row is not None:
+        return row
+    return pd.Series({
+        "Strategia": state.get("official", ""),
+        "Stato": state.get("official_status", "🟡 Monitorata"),
+        "Punteggio definitivo": state.get("official_score", 0),
+        "Partite": state.get("official_matches", 0),
+        "Profitto €": state.get("official_profit", 0),
+        "ROI %": state.get("official_roi", 0),
+    })
 
 
 def editor_form(data, prefix):
@@ -2234,6 +2504,74 @@ elif page == "🧠 Trova metodo migliore":
                     st.info(
                         "La prima posizione è già calcolata automaticamente, ma lo storico è ancora giovane. "
                         "Il peso della stabilità crescerà automaticamente fino a 10 snapshot."
+                    )
+
+                st.markdown("### 🎯 Strategia ufficiale da seguire")
+
+                follow_state, follow_message = update_strategy_follow_state(
+                    definitive
+                )
+                official_row = strategy_follow_display_row(
+                    definitive,
+                    follow_state,
+                )
+
+                if follow_state and official_row is not None:
+                    consolidated = bool(
+                        follow_state.get("official_consolidated", False)
+                    )
+                    official_badge = (
+                        "🟢 CONFERMATA"
+                        if consolidated
+                        else "🟠 ANCORA IN CONSOLIDAMENTO"
+                    )
+
+                    st.success(
+                        f'🎯 {official_badge} — '
+                        f'{follow_state.get("official", "")}'
+                    )
+
+                    o1, o2, o3, o4 = st.columns(4)
+                    o1.metric(
+                        "Punteggio",
+                        f'{float(official_row.get("Punteggio definitivo", 0) or 0):.2f}',
+                    )
+                    o2.metric(
+                        "Partite",
+                        int(official_row.get("Partite", 0) or 0),
+                    )
+                    o3.metric(
+                        "ROI",
+                        f'{float(official_row.get("ROI %", 0) or 0):.2f}%',
+                    )
+                    o4.metric(
+                        "Profitto",
+                        f'€ {float(official_row.get("Profitto €", 0) or 0):.2f}',
+                    )
+
+                    challenger = str(follow_state.get("challenger") or "")
+                    streak = int(
+                        follow_state.get("challenger_streak", 0) or 0
+                    )
+
+                    if challenger:
+                        st.warning(
+                            f"🧪 Miglior sfidante: {challenger} — "
+                            f"{streak}/{CHALLENGER_REQUIRED_STREAK} "
+                            f"conferme consecutive. NON cambiare ancora strategia."
+                        )
+                    else:
+                        st.info(
+                            "✅ Nessuno sfidante ha ancora i requisiti "
+                            "per chiedere un cambio."
+                        )
+
+                    st.caption(follow_message)
+                    st.caption(
+                        "Il cambio automatico avviene solo quando uno "
+                        "sfidante sufficientemente solido supera l'ufficiale "
+                        f"di almeno {CHALLENGER_MIN_SCORE_ADVANTAGE:.0f} punti "
+                        f"per {CHALLENGER_REQUIRED_STREAK} rilevazioni consecutive."
                     )
 
             st.markdown("### 🔎 Apri una strategia")
