@@ -1,0 +1,25 @@
+name: Test Sportmonks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Test Sportmonks
+        env:
+          SPORTMONKS_TOKEN: ${{ secrets.SPORTMONKS_TOKEN }}
+        run: python test_sportmonks.py
