@@ -485,16 +485,262 @@ def combo_table(df, min_sample=3, max_filters=3):
 
 
 def apply_strategy_filters(df, filters, min_odds, max_odds, min_prob, max_prob):
+    """
+    Filtro manuale del Laboratorio.
+
+    Usa la stessa normalizzazione del motore automatico:
+    - stringhe ripulite dagli spazi;
+    - quota = current_odds;
+    - estremi inclusi.
+    """
     filtered = df.copy()
+
     for column, values in filters.items():
         if values:
-            filtered = filtered[filtered[column].astype(str).isin(values)]
-    odds = pd.to_numeric(filtered["current_odds"], errors="coerce")
-    filtered = filtered[(odds >= min_odds) & (odds <= max_odds)]
+            wanted = {str(v).strip() for v in values}
+            series = (
+                filtered[column]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+            )
+            filtered = filtered[series.isin(wanted)]
 
-    probs = pd.to_numeric(filtered["prob_1"], errors="coerce")
-    filtered = filtered[(probs >= min_prob) & (probs <= max_prob)]
+    odds = pd.to_numeric(
+        filtered["current_odds"],
+        errors="coerce",
+    )
+    filtered = filtered[
+        (odds >= float(min_odds))
+        & (odds <= float(max_odds))
+    ]
+
+    probs = pd.to_numeric(
+        filtered["prob_1"],
+        errors="coerce",
+    )
+    filtered = filtered[
+        (probs >= float(min_prob))
+        & (probs <= float(max_prob))
+    ]
+
     return filtered
+
+
+def strategy_dataset_signature(df):
+    """
+    Firma del database usato dal motore.
+
+    Se cambia una partita, un esito, una quota o un indicatore,
+    cambia anche la firma e la classifica viene ricalcolata.
+    """
+    if df is None or df.empty:
+        return "EMPTY"
+
+    columns = [
+        c for c in ALL_COLUMNS
+        if c in df.columns
+    ]
+
+    stable = (
+        df[columns]
+        .copy()
+        .sort_values(
+            ["date", "time", "id"],
+            na_position="last",
+        )
+        .fillna("")
+        .astype(str)
+    )
+
+    raw = stable.to_csv(
+        index=False,
+        lineterminator="\n",
+    )
+
+    return hashlib.sha256(
+        raw.encode("utf-8")
+    ).hexdigest()
+
+
+def strategy_engine_signature(
+    df,
+    min_sample,
+    max_filters,
+    top_n,
+    validation_ratio,
+):
+    raw = "|".join([
+        strategy_dataset_signature(df),
+        str(int(min_sample)),
+        str(int(max_filters)),
+        str(int(top_n)),
+        f"{float(validation_ratio):.6f}",
+    ])
+
+    return hashlib.sha256(
+        raw.encode("utf-8")
+    ).hexdigest()
+
+
+def apply_generated_strategy_name(df, strategy_name):
+    """
+    Applica direttamente al database una strategia scritta dal motore,
+    per esempio:
+
+        MTR=VE + QI/QA=VE + Quota 1.20-1.70
+
+    Serve a fare in modo che Strategia ufficiale, Classifica e Laboratorio
+    lavorino sullo stesso identico insieme di partite.
+    """
+    if df is None or df.empty or not strategy_name:
+        return pd.DataFrame(
+            columns=df.columns if df is not None else []
+        )
+
+    filtered = add_strategy_derived_columns(df.copy())
+
+    categorical_prefixes = {
+        "ALLB colore=": "allibramento_color",
+        "ALLB indicatore=": "allb",
+        "MTR=": "mtr",
+        "SCL=": "scl",
+        "CAL=": "cal",
+        "STATUS=": "status",
+        "C.AFF.=": "c_aff",
+        "FLBK=": "flbk",
+        "C.FB.=": "c_fb",
+        "QRA/QA=": "qra_qa",
+        "QI/QA=": "qi_qa",
+        "Campionato=": "league",
+    }
+
+    conditions = [
+        part.strip()
+        for part in str(strategy_name).split(" + ")
+        if part.strip()
+    ]
+
+    for condition in conditions:
+        handled = False
+
+        for prefix, column in categorical_prefixes.items():
+            if condition.startswith(prefix):
+                value = condition[len(prefix):].strip()
+                series = (
+                    filtered[column]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+                filtered = filtered[
+                    series == value
+                ]
+                handled = True
+                break
+
+        if handled:
+            continue
+
+        quota_match = re.fullmatch(
+            r"Quota\s+([0-9]+(?:\.[0-9]+)?)-([0-9]+(?:\.[0-9]+)?)",
+            condition,
+        )
+        if quota_match:
+            low = float(quota_match.group(1))
+            high = float(quota_match.group(2))
+            odds = pd.to_numeric(
+                filtered["current_odds"],
+                errors="coerce",
+            )
+            filtered = filtered[
+                (odds >= low)
+                & (odds <= high)
+            ]
+            continue
+
+        caff_count = pd.to_numeric(
+            filtered["c_aff_count"],
+            errors="coerce",
+        )
+
+        if condition == "C.AFF. comparazioni ≤200":
+            filtered = filtered[caff_count <= 200]
+            continue
+
+        if condition == "C.AFF. comparazioni 201-500":
+            filtered = filtered[
+                (caff_count >= 201)
+                & (caff_count <= 500)
+            ]
+            continue
+
+        if condition == "C.AFF. comparazioni ≥501":
+            filtered = filtered[caff_count >= 501]
+            continue
+
+        movement = pd.to_numeric(
+            filtered["_odds_move_pct"],
+            errors="coerce",
+        )
+
+        if condition == "Quota scesa >=5%":
+            filtered = filtered[movement <= -5.0]
+            continue
+
+        if condition == "Quota scesa 2-5%":
+            filtered = filtered[
+                (movement >= -5.0)
+                & (movement <= -2.0)
+            ]
+            continue
+
+        if condition == "Quota salita 2-5%":
+            filtered = filtered[
+                (movement >= 2.0)
+                & (movement <= 5.0)
+            ]
+            continue
+
+        if condition == "Quota salita >=5%":
+            filtered = filtered[movement >= 5.0]
+            continue
+
+        value = pd.to_numeric(
+            filtered["_value_vs_fair_pct"],
+            errors="coerce",
+        )
+
+        if condition == "Value >=2%":
+            filtered = filtered[value >= 2.0]
+            continue
+
+        if condition == "Value >=5%":
+            filtered = filtered[value >= 5.0]
+            continue
+
+        if condition == "Value >=10%":
+            filtered = filtered[value >= 10.0]
+            continue
+
+        if condition == "Value negativo":
+            filtered = filtered[value < 0]
+            continue
+
+        allb_delta = pd.to_numeric(
+            filtered["_allb_delta"],
+            errors="coerce",
+        )
+
+        if condition == "Allibramento > media":
+            filtered = filtered[allb_delta > 0]
+            continue
+
+        if condition == "Allibramento < media":
+            filtered = filtered[allb_delta < 0]
+            continue
+
+    return filtered.copy()
 
 
 def max_losing_streak(df):
@@ -1675,20 +1921,84 @@ def update_strategy_follow_state(definitive):
     )
 
 
-def strategy_follow_display_row(definitive, state):
+def strategy_follow_display_row(definitive, state, closed=None):
+    """
+    La posizione/punteggio rimane quello della classifica,
+    ma Partite, ROI e Profitto vengono sempre ricalcolati
+    sul database attuale usando la regola testuale ufficiale.
+    """
     if not state:
         return None
-    row = _strategy_row_by_name(definitive, state.get("official"))
+
+    official_name = str(
+        state.get("official") or ""
+    )
+
+    row = _strategy_row_by_name(
+        definitive,
+        official_name,
+    )
+
     if row is not None:
-        return row
-    return pd.Series({
-        "Strategia": state.get("official", ""),
-        "Stato": state.get("official_status", "🟡 Monitorata"),
-        "Punteggio definitivo": state.get("official_score", 0),
-        "Partite": state.get("official_matches", 0),
-        "Profitto €": state.get("official_profit", 0),
-        "ROI %": state.get("official_roi", 0),
-    })
+        display = row.copy()
+    else:
+        display = pd.Series({
+            "Strategia": official_name,
+            "Stato": state.get(
+                "official_status",
+                "🟡 Monitorata",
+            ),
+            "Punteggio definitivo": state.get(
+                "official_score",
+                0,
+            ),
+            "Partite": state.get(
+                "official_matches",
+                0,
+            ),
+            "Profitto €": state.get(
+                "official_profit",
+                0,
+            ),
+            "ROI %": state.get(
+                "official_roi",
+                0,
+            ),
+        })
+
+    if (
+        closed is not None
+        and not closed.empty
+        and official_name
+    ):
+        live = apply_generated_strategy_name(
+            closed,
+            official_name,
+        )
+
+        live_stats = strategy_statistics(live)
+
+        display["Partite"] = live_stats["closed"]
+        display["Vinte"] = live_stats["wins"]
+        display["Perse"] = live_stats["losses"]
+        display["Win rate %"] = round(
+            live_stats["win_rate"],
+            2,
+        )
+        display["Quota media"] = round(
+            live_stats["avg_odds"],
+            2,
+        )
+        display["Profitto €"] = round(
+            live_stats["profit"],
+            2,
+        )
+        display["ROI %"] = round(
+            live_stats["roi"],
+            2,
+        )
+
+    return display
 
 
 
@@ -2830,12 +3140,44 @@ elif page == "🧠 Trova metodo migliore":
                 )
             )
 
-        if st.button(
+        current_engine_signature = strategy_engine_signature(
+            closed,
+            min_sample=int(min_sample),
+            max_filters=int(max_filters),
+            top_n=int(top_n),
+            validation_ratio=float(validation_pct) / 100.0,
+        )
+
+        previous_engine_signature = st.session_state.get(
+            "strategy_engine_signature_v3"
+        )
+
+        existing_ranking = st.session_state.get(
+            "strategy_ranking_v2"
+        )
+
+        database_changed = (
+            isinstance(existing_ranking, pd.DataFrame)
+            and not existing_ranking.empty
+            and previous_engine_signature
+            and previous_engine_signature
+            != current_engine_signature
+        )
+
+        manual_search = st.button(
             "🔍 Cerca migliori strategie",
             type="primary",
             use_container_width=True,
-        ):
-            with st.spinner("Analizzo le combinazioni..."):
+        )
+
+        if manual_search or database_changed:
+            spinner_text = (
+                "Dati cambiati: aggiorno automaticamente strategie e statistiche..."
+                if database_changed and not manual_search
+                else "Analizzo le combinazioni..."
+            )
+
+            with st.spinner(spinner_text):
                 ranking, selections = automatic_strategy_search(
                     closed,
                     min_sample=int(min_sample),
@@ -2843,14 +3185,41 @@ elif page == "🧠 Trova metodo migliore":
                     top_n=int(top_n),
                     validation_ratio=float(validation_pct) / 100.0,
                 )
-                st.session_state["strategy_ranking_v2"] = ranking
-                st.session_state["strategy_selections_v2"] = selections
 
-                history_result = save_strategy_snapshot(ranking)
-                st.session_state["strategy_history_result"] = history_result
+                st.session_state[
+                    "strategy_ranking_v2"
+                ] = ranking
 
-        ranking = st.session_state.get("strategy_ranking_v2")
-        selections = st.session_state.get("strategy_selections_v2", {})
+                st.session_state[
+                    "strategy_selections_v2"
+                ] = selections
+
+                st.session_state[
+                    "strategy_engine_signature_v3"
+                ] = current_engine_signature
+
+                history_result = save_strategy_snapshot(
+                    ranking
+                )
+
+                st.session_state[
+                    "strategy_history_result"
+                ] = history_result
+
+            if database_changed and not manual_search:
+                st.success(
+                    "🔄 Classifica aggiornata automaticamente: "
+                    "il database o i parametri del motore sono cambiati."
+                )
+
+        ranking = st.session_state.get(
+            "strategy_ranking_v2"
+        )
+
+        selections = st.session_state.get(
+            "strategy_selections_v2",
+            {},
+        )
 
         if isinstance(ranking, pd.DataFrame) and not ranking.empty:
             st.markdown("### 🧪 Classifica completa del motore")
@@ -2977,6 +3346,7 @@ elif page == "🧠 Trova metodo migliore":
                 official_row = strategy_follow_display_row(
                     definitive,
                     follow_state,
+                    closed=closed,
                 )
 
                 if follow_state and official_row is not None:
@@ -3010,6 +3380,12 @@ elif page == "🧠 Trova metodo migliore":
                     o4.metric(
                         "Profitto",
                         f'€ {float(official_row.get("Profitto €", 0) or 0):.2f}',
+                    )
+
+                    st.caption(
+                        "🔄 Partite, ROI e profitto della strategia ufficiale "
+                        "sono ricalcolati in tempo reale sul database attuale "
+                        "con gli stessi identici filtri usati dal motore."
                     )
 
                     challenger = str(follow_state.get("challenger") or "")
