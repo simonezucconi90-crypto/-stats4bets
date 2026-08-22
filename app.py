@@ -5,6 +5,7 @@ import os
 import sqlite3
 import time
 import math
+import re
 import hashlib
 from datetime import datetime, timezone
 from itertools import combinations
