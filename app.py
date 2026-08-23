@@ -2672,10 +2672,13 @@ elif page == "🎯 Partite da giocare":
     st.metric("Partite attualmente in attesa", len(pending))
 
     def popts(col):
-        if pending.empty or col not in pending.columns:
+        # Le opzioni dei filtri vengono prese dall'intero database,
+        # non solo dalle partite in attesa. In questo modo le tendine
+        # restano utilizzabili anche quando pending = 0.
+        if df.empty or col not in df.columns:
             return []
         vals = (
-            pending[col]
+            df[col]
             .dropna()
             .astype(str)
             .str.strip()
