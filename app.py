@@ -2655,124 +2655,415 @@ if page == "⚡ Inserimento rapido":
 
 elif page == "🎯 Partite da giocare":
     st.subheader("🎯 Partite da giocare")
-    st.caption("Solo partite in attesa: usa la strategia ufficiale oppure filtra manualmente con gli stessi criteri del Laboratorio.")
+    st.caption(
+        "Qui puoi applicare la strategia ufficiale oppure usare tutti i filtri manuali. "
+        "I filtri restano sempre visibili, anche quando non ci sono partite in attesa."
+    )
 
     df = get_matches()
-    pending = df[~df["outcome"].isin(["V","P"])].copy() if not df.empty else df
 
-    if pending.empty:
-        st.info("Non ci sono partite in attesa.")
+    if df.empty:
+        pending = pd.DataFrame(columns=ALL_COLUMNS)
     else:
-        def popts(col):
-            vals = pending[col].dropna().astype(str).str.strip()
-            return sorted(v for v in vals.unique() if v and v.lower() not in {"nan","none"})
+        pending = df[
+            ~df["outcome"].isin(["V", "P"])
+        ].copy()
 
-        auto_tab, manual_tab = st.tabs(["🎯 Strategia ufficiale", "🎛️ Filtri manuali"])
+    st.metric("Partite attualmente in attesa", len(pending))
 
-        with auto_tab:
-            state = load_strategy_follow_state()
-            official = str(state.get("official") or "") if isinstance(state, dict) else ""
-            closed_now = df[df["outcome"].isin(["V","P"])].copy()
-            hist = apply_generated_strategy_name(closed_now, official) if official else pd.DataFrame()
-            hs = strategy_statistics(hist) if not hist.empty else {"closed":0,"profit":0,"roi":0}
+    def popts(col):
+        if pending.empty or col not in pending.columns:
+            return []
+        vals = (
+            pending[col]
+            .dropna()
+            .astype(str)
+            .str.strip()
+        )
+        return sorted(
+            v for v in vals.unique()
+            if v and v.lower() not in {"nan", "none"}
+        )
 
-            usable = (
-                bool(official)
-                and hs["closed"] >= ELITE_MIN_MATCHES
-                and hs["profit"] > 0
-                and hs["roi"] > 0
+    auto_tab, manual_tab = st.tabs([
+        "🎯 Strategia ufficiale",
+        "🎛️ Filtri manuali",
+    ])
+
+    with auto_tab:
+        state = load_strategy_follow_state()
+        official = (
+            str(state.get("official") or "")
+            if isinstance(state, dict)
+            else ""
+        )
+
+        closed_now = (
+            df[df["outcome"].isin(["V", "P"])].copy()
+            if not df.empty
+            else pd.DataFrame(columns=ALL_COLUMNS)
+        )
+
+        official_hist = (
+            apply_generated_strategy_name(
+                closed_now,
+                official,
+            )
+            if official
+            else pd.DataFrame()
+        )
+
+        official_stats = (
+            strategy_statistics(official_hist)
+            if not official_hist.empty
+            else {"closed": 0, "profit": 0.0, "roi": 0.0}
+        )
+
+        usable = (
+            bool(official)
+            and official_stats["closed"] >= ELITE_MIN_MATCHES
+            and official_stats["profit"] > 0
+            and official_stats["roi"] > 0
+        )
+
+        if not official:
+            st.warning(
+                "Nessuna strategia ufficiale disponibile al momento."
+            )
+        elif not usable:
+            st.warning(
+                f"⚠️ Precedente ufficiale: {official}. "
+                "Non viene usata automaticamente perché oggi "
+                "non supera i controlli minimi."
+            )
+        else:
+            st.success(
+                f"🎯 Strategia applicata: {official}"
             )
 
-            if not official:
-                st.warning("Nessuna strategia ufficiale disponibile.")
-            elif not usable:
-                st.warning(f"⚠️ Precedente ufficiale: {official}. Non viene usata automaticamente perché oggi non supera i controlli minimi.")
-            else:
-                st.success(f"🎯 Strategia applicata: {official}")
-                auto = apply_generated_strategy_name(pending, official)
-                st.metric("Partite compatibili in attesa", len(auto))
-                if auto.empty:
-                    st.info("Nessuna partita in attesa rispetta la strategia ufficiale.")
-                else:
-                    show = auto.copy()
-                    show["Quota"] = pd.to_numeric(show["current_odds"], errors="coerce").round(2)
-                    cols = ["date","time","league","match_name","Quota","allibramento_color","mtr","scl","cal","c_aff","c_aff_count","flbk","c_fb","qra_qa","qi_qa","status"]
-                    show = show[[c for c in cols if c in show.columns]].rename(columns={
-                        "date":"Data","time":"Ora","league":"Campionato","match_name":"Partita",
-                        "allibramento_color":"ALLB","mtr":"MTR","scl":"SCL","cal":"CAL",
-                        "c_aff":"C.AFF.","c_aff_count":"C.AFF. COUNT","flbk":"FLBK",
-                        "c_fb":"C.FB.","qra_qa":"QRA/QA","qi_qa":"QI/QA","status":"STATUS"
-                    })
-                    st.dataframe(show.sort_values(["Data","Ora"]), use_container_width=True, hide_index=True)
+            auto = apply_generated_strategy_name(
+                pending,
+                official,
+            )
 
-        with manual_tab:
-            st.markdown("### Indicatori")
-            a,b,c = st.columns(3)
-            allb=a.multiselect("Allibramento",popts("allibramento_color"),key="play_allb")
-            mtr=b.multiselect("MTR",popts("mtr"),key="play_mtr")
-            scl=c.multiselect("SCL",popts("scl"),key="play_scl")
-            a,b,c = st.columns(3)
-            cal=a.multiselect("CAL",popts("cal"),key="play_cal")
-            caff=b.multiselect("C. AFF.",popts("c_aff"),key="play_caff")
-            flbk=c.multiselect("FLBK",popts("flbk"),key="play_flbk")
-            a,b,c = st.columns(3)
-            cfb=a.multiselect("C. FB.",popts("c_fb"),key="play_cfb")
-            qra=b.multiselect("QRA/QA",popts("qra_qa"),key="play_qra")
-            qi=c.multiselect("QI/QA",popts("qi_qa"),key="play_qi")
+            st.metric(
+                "Partite compatibili con la strategia ufficiale",
+                len(auto),
+            )
+
+            if auto.empty:
+                st.info(
+                    "Nessuna partita in attesa rispetta la strategia ufficiale."
+                )
+            else:
+                show = auto.copy()
+                show["Quota"] = pd.to_numeric(
+                    show["current_odds"],
+                    errors="coerce",
+                ).round(2)
+
+                cols = [
+                    "date","time","league","match_name","Quota",
+                    "allibramento_color","mtr","scl","cal",
+                    "c_aff","c_aff_count","flbk","c_fb",
+                    "qra_qa","qi_qa","status"
+                ]
+
+                show = show[
+                    [c for c in cols if c in show.columns]
+                ].rename(columns={
+                    "date":"Data",
+                    "time":"Ora",
+                    "league":"Campionato",
+                    "match_name":"Partita",
+                    "allibramento_color":"ALLB",
+                    "mtr":"MTR",
+                    "scl":"SCL",
+                    "cal":"CAL",
+                    "c_aff":"C.AFF.",
+                    "c_aff_count":"C.AFF. COUNT",
+                    "flbk":"FLBK",
+                    "c_fb":"C.FB.",
+                    "qra_qa":"QRA/QA",
+                    "qi_qa":"QI/QA",
+                    "status":"STATUS",
+                })
+
+                st.dataframe(
+                    show.sort_values(
+                        ["Data","Ora"],
+                        ascending=[True, True],
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+    with manual_tab:
+        st.markdown("### Indicatori")
+
+        a,b,c = st.columns(3)
+        allb = a.multiselect(
+            "Allibramento",
+            popts("allibramento_color"),
+            key="play_allb",
+        )
+        mtr = b.multiselect(
+            "MTR",
+            popts("mtr"),
+            key="play_mtr",
+        )
+        scl = c.multiselect(
+            "SCL",
+            popts("scl"),
+            key="play_scl",
+        )
+
+        a,b,c = st.columns(3)
+        cal = a.multiselect(
+            "CAL",
+            popts("cal"),
+            key="play_cal",
+        )
+        caff = b.multiselect(
+            "C. AFF.",
+            popts("c_aff"),
+            key="play_caff",
+        )
+        flbk = c.multiselect(
+            "FLBK",
+            popts("flbk"),
+            key="play_flbk",
+        )
+
+        a,b,c = st.columns(3)
+        cfb = a.multiselect(
+            "C. FB.",
+            popts("c_fb"),
+            key="play_cfb",
+        )
+        qra = b.multiselect(
+            "QRA/QA",
+            popts("qra_qa"),
+            key="play_qra",
+        )
+        qi = c.multiselect(
+            "QI/QA",
+            popts("qi_qa"),
+            key="play_qi",
+        )
+
+        a,b = st.columns(2)
+        status = a.multiselect(
+            "STATUS",
+            popts("status"),
+            key="play_status",
+        )
+        leagues = b.multiselect(
+            "Campionati",
+            popts("league"),
+            key="play_leagues",
+        )
+
+        st.markdown("### Quota e probabilità")
+
+        odds = (
+            pd.to_numeric(
+                pending["current_odds"],
+                errors="coerce",
+            ).dropna()
+            if not pending.empty
+            else pd.Series(dtype=float)
+        )
+
+        probs = (
+            pd.to_numeric(
+                pending["prob_1"],
+                errors="coerce",
+            ).dropna()
+            if not pending.empty
+            else pd.Series(dtype=float)
+        )
+
+        a,b = st.columns(2)
+        min_odds = a.number_input(
+            "Quota minima",
+            value=float(odds.min())
+            if not odds.empty else 1.20,
+            step=0.01,
+            key="play_min_odds",
+        )
+        max_odds = b.number_input(
+            "Quota massima",
+            value=float(odds.max())
+            if not odds.empty else 2.00,
+            step=0.01,
+            key="play_max_odds",
+        )
+
+        a,b = st.columns(2)
+        min_prob = a.number_input(
+            "Probabilità 1 minima",
+            value=float(probs.min())
+            if not probs.empty else 0.0,
+            step=0.5,
+            key="play_min_prob",
+        )
+        max_prob = b.number_input(
+            "Probabilità 1 massima",
+            value=float(probs.max())
+            if not probs.empty else 100.0,
+            step=0.5,
+            key="play_max_prob",
+        )
+
+        st.markdown("### C.AFF. COUNT")
+
+        ccvals = (
+            pd.to_numeric(
+                pending["c_aff_count"],
+                errors="coerce",
+            ).dropna()
+            if not pending.empty
+            else pd.Series(dtype=float)
+        )
+
+        use_cc = st.checkbox(
+            "Usa filtro C.AFF. COUNT",
+            value=False,
+            key="play_use_cc",
+        )
+
+        if ccvals.empty:
+            min_cc = 0
+            max_cc = 0
+            st.caption(
+                "Nessun valore C.AFF. COUNT disponibile nelle partite in attesa."
+            )
+        else:
             a,b = st.columns(2)
-            status=a.multiselect("STATUS",popts("status"),key="play_status")
-            leagues=b.multiselect("Campionati",popts("league"),key="play_leagues")
+            min_cc = a.number_input(
+                "C.AFF. COUNT minimo",
+                min_value=0,
+                value=int(ccvals.min()),
+                step=1,
+                key="play_min_cc",
+            )
+            max_cc = b.number_input(
+                "C.AFF. COUNT massimo",
+                min_value=0,
+                value=int(ccvals.max()),
+                step=1,
+                key="play_max_cc",
+            )
 
-            odds=pd.to_numeric(pending["current_odds"],errors="coerce").dropna()
-            probs=pd.to_numeric(pending["prob_1"],errors="coerce").dropna()
-            a,b=st.columns(2)
-            min_odds=a.number_input("Quota minima",value=float(odds.min()) if not odds.empty else 1.0,step=0.01,key="play_min_odds")
-            max_odds=b.number_input("Quota massima",value=float(odds.max()) if not odds.empty else 5.0,step=0.01,key="play_max_odds")
-            a,b=st.columns(2)
-            min_prob=a.number_input("Probabilità 1 minima",value=float(probs.min()) if not probs.empty else 0.0,step=0.5,key="play_min_prob")
-            max_prob=b.number_input("Probabilità 1 massima",value=float(probs.max()) if not probs.empty else 100.0,step=0.5,key="play_max_prob")
+        st.markdown("### Metodi associati")
+        methods = st.multiselect(
+            "Metodi associati richiesti",
+            list(METHOD_COLUMNS),
+            key="play_methods",
+        )
 
-            ccvals=pd.to_numeric(pending["c_aff_count"],errors="coerce").dropna()
-            use_cc=st.checkbox("Usa filtro C.AFF. COUNT",value=False,key="play_use_cc")
-            if ccvals.empty:
-                min_cc=max_cc=0
-            else:
-                a,b=st.columns(2)
-                min_cc=a.number_input("C.AFF. COUNT minimo",min_value=0,value=int(ccvals.min()),step=1,key="play_min_cc")
-                max_cc=b.number_input("C.AFF. COUNT massimo",min_value=0,value=int(ccvals.max()),step=1,key="play_max_cc")
+        filters = {
+            "allibramento_color": allb,
+            "mtr": mtr,
+            "scl": scl,
+            "cal": cal,
+            "c_aff": caff,
+            "flbk": flbk,
+            "c_fb": cfb,
+            "qra_qa": qra,
+            "qi_qa": qi,
+            "status": status,
+            "league": leagues,
+        }
 
-            methods=st.multiselect("Metodi associati richiesti",list(METHOD_COLUMNS),key="play_methods")
-
-            filters={
-                "allibramento_color":allb,"mtr":mtr,"scl":scl,"cal":cal,
-                "c_aff":caff,"flbk":flbk,"c_fb":cfb,"qra_qa":qra,
-                "qi_qa":qi,"status":status,"league":leagues
-            }
-            found=apply_strategy_filters(pending,filters,min_odds,max_odds,min_prob,max_prob)
+        if pending.empty:
+            found = pending.copy()
+        else:
+            found = apply_strategy_filters(
+                pending,
+                filters,
+                min_odds,
+                max_odds,
+                min_prob,
+                max_prob,
+            )
 
             if use_cc and not ccvals.empty:
-                cc=pd.to_numeric(found["c_aff_count"],errors="coerce")
-                found=found[(cc>=min_cc)&(cc<=max_cc)]
+                cc = pd.to_numeric(
+                    found["c_aff_count"],
+                    errors="coerce",
+                )
+                found = found[
+                    (cc >= min_cc)
+                    & (cc <= max_cc)
+                ]
 
             for method in methods:
-                col=METHOD_COLUMNS[method]
-                found=found[pd.to_numeric(found[col],errors="coerce").fillna(0)==1]
+                col = METHOD_COLUMNS[method]
+                found = found[
+                    pd.to_numeric(
+                        found[col],
+                        errors="coerce",
+                    ).fillna(0) == 1
+                ]
 
-            st.metric("Partite in attesa trovate",len(found))
-            if found.empty:
-                st.info("Nessuna partita rispetta tutti i filtri.")
-            else:
-                show=found.copy()
-                show["Quota"]=pd.to_numeric(show["current_odds"],errors="coerce").round(2)
-                show["Prob. 1"]=pd.to_numeric(show["prob_1"],errors="coerce").round(1)
-                cols=["date","time","league","match_name","Quota","Prob. 1","allibramento_color","mtr","scl","cal","c_aff","c_aff_count","flbk","c_fb","qra_qa","qi_qa","status"]
-                show=show[[c for c in cols if c in show.columns]].rename(columns={
-                    "date":"Data","time":"Ora","league":"Campionato","match_name":"Partita",
-                    "allibramento_color":"ALLB","mtr":"MTR","scl":"SCL","cal":"CAL",
-                    "c_aff":"C.AFF.","c_aff_count":"C.AFF. COUNT","flbk":"FLBK",
-                    "c_fb":"C.FB.","qra_qa":"QRA/QA","qi_qa":"QI/QA","status":"STATUS"
-                })
-                st.dataframe(show.sort_values(["Data","Ora"]),use_container_width=True,hide_index=True)
+        st.markdown("### Risultato filtro")
+        st.metric(
+            "Partite in attesa trovate",
+            len(found),
+        )
+
+        if found.empty:
+            st.info(
+                "Nessuna partita in attesa rispetta tutti i filtri selezionati."
+            )
+        else:
+            show = found.copy()
+            show["Quota"] = pd.to_numeric(
+                show["current_odds"],
+                errors="coerce",
+            ).round(2)
+            show["Prob. 1"] = pd.to_numeric(
+                show["prob_1"],
+                errors="coerce",
+            ).round(1)
+
+            cols = [
+                "date","time","league","match_name","Quota","Prob. 1",
+                "allibramento_color","mtr","scl","cal",
+                "c_aff","c_aff_count","flbk","c_fb",
+                "qra_qa","qi_qa","status"
+            ]
+
+            show = show[
+                [c for c in cols if c in show.columns]
+            ].rename(columns={
+                "date":"Data",
+                "time":"Ora",
+                "league":"Campionato",
+                "match_name":"Partita",
+                "allibramento_color":"ALLB",
+                "mtr":"MTR",
+                "scl":"SCL",
+                "cal":"CAL",
+                "c_aff":"C.AFF.",
+                "c_aff_count":"C.AFF. COUNT",
+                "flbk":"FLBK",
+                "c_fb":"C.FB.",
+                "qra_qa":"QRA/QA",
+                "qi_qa":"QI/QA",
+                "status":"STATUS",
+            })
+
+            st.dataframe(
+                show.sort_values(
+                    ["Data","Ora"],
+                    ascending=[True, True],
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
 
 
 elif page == "🏠 Home":
@@ -3424,121 +3715,125 @@ elif page == "🧠 Trova metodo migliore":
         )
 
         if isinstance(ranking, pd.DataFrame) and not ranking.empty:
-            st.markdown("### 🧪 Classifica completa del motore")
+            with st.expander(
+                "🔧 Dettagli tecnici e classifiche complete",
+                expanded=False,
+            ):
+                st.markdown("### 🧪 Classifica completa del motore")
 
-            display_ranking = ranking.drop(columns=["ID"]).copy()
-            st.dataframe(
-                display_ranking,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            st.caption(
-                "✅ = ROI positivo sia nella parte di ricerca sia nella parte "
-                "più recente usata per la verifica. ⚠️ = da considerare esplorativa."
-            )
-            st.caption(
-                "Profitto / 100€ mostra quanto rende la strategia ogni 100 € "
-                "complessivamente puntati: è utile per confrontare strategie "
-                "con profitti simili ma capitale impiegato diverso."
-            )
-            st.caption(
-                "Δ ROI vs base mostra quanto il filtro migliora o peggiora rispetto "
-                "a giocare tutte le partite. Stabilità controlla il rendimento in "
-                "3 blocchi cronologici separati."
-            )
-
-            history_result = st.session_state.get("strategy_history_result")
-
-            if isinstance(history_result, dict):
-                if not history_result.get("ok"):
-                    st.warning(
-                        "📚 Storico classifica non ancora attivo: "
-                        + history_result.get("message", "")
-                    )
-                elif history_result.get("saved"):
-                    st.success("📚 " + history_result.get("message", ""))
-
-            history_table, snapshot_count = strategy_history_summary(
-                ranking["Strategia"].tolist()
-            )
-
-            st.markdown("### 🧭 Stabilità della classifica")
-
-            if snapshot_count == 0:
-                st.info(
-                    "Lo storico partirà dal primo snapshot salvato. "
-                    "Dopo alcuni cambiamenti della classifica inizierai "
-                    "a vedere quali strategie rimangono davvero in alto."
-                )
-            else:
-                st.caption(
-                    f"Snapshot distinti salvati: {snapshot_count}. "
-                    "Top 5 % indica in quanti snapshot, dalla prima "
-                    "comparsa della strategia, è rimasta nelle prime 5. "
-                    "La classifica viene salvata solo quando cambia, "
-                    "quindi premere il tasto più volte non altera i dati."
-                )
-
-                if snapshot_count < 5:
-                    st.warning(
-                        "Lo storico è ancora molto giovane: con meno "
-                        "di 5 snapshot le percentuali sono solo indicative."
-                    )
-
-                if not history_table.empty:
-                    st.dataframe(
-                        history_table.head(20),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-
-            st.markdown("### 🏆 Classifica Definitiva")
-            st.caption(
-                "Questa è la classifica da guardare: combina automaticamente rendimento attuale, "
-                "campione, validazione, stabilità e storico. Il peso dello storico aumenta "
-                "automaticamente man mano che crescono le rilevazioni."
-            )
-
-            definitive = definitive_strategy_ranking(
-                ranking,
-                history_table,
-                snapshot_count,
-                selections,
-            )
-
-            if not definitive.empty:
-                winner = definitive.iloc[0]
-                st.success(
-                    f'🥇 Strategia consigliata adesso: {winner["Strategia"]} '
-                    f'— punteggio definitivo {winner["Punteggio definitivo"]:.2f} '
-                    f'— {winner["Stato"]}'
-                )
-                duplicates_removed = int(
-                    pd.to_numeric(
-                        definitive["Duplicati rimossi"],
-                        errors="coerce",
-                    ).fillna(0).sum()
-                ) if "Duplicati rimossi" in definitive.columns else 0
-
-                if duplicates_removed > 0:
-                    st.caption(
-                        f"🧹 Strategie equivalenti eliminate automaticamente: "
-                        f"{duplicates_removed}. Ogni riga rimasta seleziona "
-                        f"un gruppo realmente diverso di partite."
-                    )
-
+                display_ranking = ranking.drop(columns=["ID"]).copy()
                 st.dataframe(
-                    definitive,
+                    display_ranking,
                     use_container_width=True,
                     hide_index=True,
                 )
 
-                if snapshot_count < 5:
+                st.caption(
+                    "✅ = ROI positivo sia nella parte di ricerca sia nella parte "
+                    "più recente usata per la verifica. ⚠️ = da considerare esplorativa."
+                )
+                st.caption(
+                    "Profitto / 100€ mostra quanto rende la strategia ogni 100 € "
+                    "complessivamente puntati: è utile per confrontare strategie "
+                    "con profitti simili ma capitale impiegato diverso."
+                )
+                st.caption(
+                    "Δ ROI vs base mostra quanto il filtro migliora o peggiora rispetto "
+                    "a giocare tutte le partite. Stabilità controlla il rendimento in "
+                    "3 blocchi cronologici separati."
+                )
+
+                history_result = st.session_state.get("strategy_history_result")
+
+                if isinstance(history_result, dict):
+                    if not history_result.get("ok"):
+                        st.warning(
+                            "📚 Storico classifica non ancora attivo: "
+                            + history_result.get("message", "")
+                        )
+                    elif history_result.get("saved"):
+                        st.success("📚 " + history_result.get("message", ""))
+
+                history_table, snapshot_count = strategy_history_summary(
+                    ranking["Strategia"].tolist()
+                )
+
+                st.markdown("### 🧭 Stabilità della classifica")
+
+                if snapshot_count == 0:
                     st.info(
-                        "La prima posizione è già calcolata automaticamente, ma lo storico è ancora giovane. "
-                        "Il peso della stabilità crescerà automaticamente fino a 10 snapshot."
+                        "Lo storico partirà dal primo snapshot salvato. "
+                        "Dopo alcuni cambiamenti della classifica inizierai "
+                        "a vedere quali strategie rimangono davvero in alto."
                     )
+                else:
+                    st.caption(
+                        f"Snapshot distinti salvati: {snapshot_count}. "
+                        "Top 5 % indica in quanti snapshot, dalla prima "
+                        "comparsa della strategia, è rimasta nelle prime 5. "
+                        "La classifica viene salvata solo quando cambia, "
+                        "quindi premere il tasto più volte non altera i dati."
+                    )
+
+                    if snapshot_count < 5:
+                        st.warning(
+                            "Lo storico è ancora molto giovane: con meno "
+                            "di 5 snapshot le percentuali sono solo indicative."
+                        )
+
+                    if not history_table.empty:
+                        st.dataframe(
+                            history_table.head(20),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                st.markdown("### 🏆 Classifica Definitiva")
+                st.caption(
+                    "Questa è la classifica da guardare: combina automaticamente rendimento attuale, "
+                    "campione, validazione, stabilità e storico. Il peso dello storico aumenta "
+                    "automaticamente man mano che crescono le rilevazioni."
+                )
+
+                definitive = definitive_strategy_ranking(
+                    ranking,
+                    history_table,
+                    snapshot_count,
+                    selections,
+                )
+
+                if not definitive.empty:
+                    winner = definitive.iloc[0]
+                    st.success(
+                        f'🥇 Strategia consigliata adesso: {winner["Strategia"]} '
+                        f'— punteggio definitivo {winner["Punteggio definitivo"]:.2f} '
+                        f'— {winner["Stato"]}'
+                    )
+                    duplicates_removed = int(
+                        pd.to_numeric(
+                            definitive["Duplicati rimossi"],
+                            errors="coerce",
+                        ).fillna(0).sum()
+                    ) if "Duplicati rimossi" in definitive.columns else 0
+
+                    if duplicates_removed > 0:
+                        st.caption(
+                            f"🧹 Strategie equivalenti eliminate automaticamente: "
+                            f"{duplicates_removed}. Ogni riga rimasta seleziona "
+                            f"un gruppo realmente diverso di partite."
+                        )
+
+                    st.dataframe(
+                        definitive,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    if snapshot_count < 5:
+                        st.info(
+                            "La prima posizione è già calcolata automaticamente, ma lo storico è ancora giovane. "
+                            "Il peso della stabilità crescerà automaticamente fino a 10 snapshot."
+                        )
 
                 st.markdown("### 🎯 Strategia ufficiale da seguire")
 
@@ -3616,7 +3911,7 @@ elif page == "🧠 Trova metodo migliore":
                         f"per {CHALLENGER_REQUIRED_STREAK} rilevazioni consecutive."
                     )
 
-                st.markdown("### 🏆 Classifica Elite")
+                st.markdown("### 🏆 Classifica Elite — quella da guardare")
                 st.caption(
                     "Questa è la classifica decisionale: mostra solo strategie "
                     "già abbastanza solide. Le provvisorie sono escluse, i duplicati "
@@ -3662,7 +3957,7 @@ elif page == "🧠 Trova metodo migliore":
                         f"Vengono mostrate al massimo {ELITE_MAX_ROWS} strategie."
                     )
 
-                st.markdown("### 👀 Strategie in osservazione forte")
+                st.markdown("### 👀 Strategie in osservazione forte — poche ma serie")
                 st.caption(
                     "Solo strategie già mature e profittevoli che non sono ancora Elite. "
                     "Le strategie nuove o con pochi dati continuano a essere studiate dal motore, "
