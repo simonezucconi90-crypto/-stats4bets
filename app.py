@@ -1224,11 +1224,14 @@ def save_strategy_snapshot(ranking):
     signature = strategy_ranking_signature(ranking)
 
     try:
-        previous = (
+        # Leggiamo più righe perché nella stessa tabella vengono salvati
+        # anche gli stati tecnici __SYSTEM_STATE__. Quelli NON devono
+        # essere considerati come ultimo snapshot della classifica.
+        previous_rows = (
             client.table(STRATEGY_HISTORY_TABLE)
-            .select("signature")
+            .select("signature,strategy,captured_at")
             .order("captured_at", desc=True)
-            .limit(1)
+            .limit(500)
             .execute()
             .data
             or []
@@ -1240,7 +1243,15 @@ def save_strategy_snapshot(ranking):
             "message": f"Tabella storico non disponibile. Dettaglio: {exc}",
         }
 
-    if previous and previous[0].get("signature") == signature:
+    previous_signature = ""
+    for previous_row in previous_rows:
+        strategy_value = str(previous_row.get("strategy") or "")
+        if strategy_value.startswith(SYSTEM_STATE_PREFIX):
+            continue
+        previous_signature = str(previous_row.get("signature") or "")
+        break
+
+    if previous_signature == signature:
         return {
             "ok": True,
             "saved": False,
@@ -1278,6 +1289,26 @@ def save_strategy_snapshot(ranking):
         "saved": True,
         "message": f"Nuovo snapshot salvato: {len(rows)} strategie.",
     }
+
+
+
+def ensure_current_strategy_snapshot(ranking):
+    """
+    Garantisce che la classifica che l'utente sta vedendo adesso
+    sia anche l'ultimo vero snapshot nello storico.
+
+    È intenzionalmente idempotente: se la classifica non è cambiata,
+    save_strategy_snapshot non crea duplicati.
+    """
+    if ranking is None or ranking.empty:
+        return {
+            "ok": True,
+            "saved": False,
+            "message": "Classifica vuota.",
+        }
+
+    return save_strategy_snapshot(ranking)
+
 
 
 def strategy_history_summary(current_strategies=None):
@@ -2127,7 +2158,14 @@ def build_elite_ranking(
                 closed.index.intersection(selected_indices)
             ].copy()
         else:
-            sdf = pd.DataFrame(columns=closed.columns)
+            # Dopo un refresh/deploy la mappa selections può non contenere
+            # più l'ID temporaneo della strategia. Non dobbiamo mostrare
+            # metriche a zero: ricostruiamo direttamente le partite usando
+            # la regola testuale della strategia.
+            sdf = apply_generated_strategy_name(
+                closed,
+                strategy_name,
+            )
 
         rs = recent_strategy_statistics(
             sdf,
@@ -3757,6 +3795,18 @@ elif page == "🧠 Trova metodo migliore":
                     elif history_result.get("saved"):
                         st.success("📚 " + history_result.get("message", ""))
 
+                # Sincronizza lo storico con la classifica realmente
+                # visualizzata prima di calcolare Top 5 / Top 10.
+                sync_history_result = ensure_current_strategy_snapshot(
+                    ranking
+                )
+
+                if not sync_history_result.get("ok"):
+                    st.warning(
+                        "⚠️ Impossibile sincronizzare lo storico: "
+                        + sync_history_result.get("message", "")
+                    )
+
                 history_table, snapshot_count = strategy_history_summary(
                     ranking["Strategia"].tolist()
                 )
@@ -3785,6 +3835,39 @@ elif page == "🧠 Trova metodo migliore":
                         )
 
                     if not history_table.empty:
+                        current_positions = {
+                            str(row["Strategia"]): pos
+                            for pos, (_, row) in enumerate(
+                                ranking.iterrows(),
+                                start=1,
+                            )
+                        }
+
+                        mismatch_count = 0
+                        for _, hist_row in history_table.iterrows():
+                            strategy_name = str(hist_row.get("Strategia", ""))
+                            current_pos = current_positions.get(strategy_name)
+                            last_pos = hist_row.get("Ultima posizione")
+                            if (
+                                current_pos is not None
+                                and pd.notna(last_pos)
+                                and int(last_pos) != int(current_pos)
+                            ):
+                                mismatch_count += 1
+
+                        if mismatch_count > 0:
+                            st.warning(
+                                f"⚠️ Controllo storico: {mismatch_count} strategie "
+                                "hanno ancora un'ultima posizione diversa dalla "
+                                "classifica corrente. Premi una volta "
+                                "'Cerca migliori strategie'; lo snapshot verrà "
+                                "riallineato automaticamente."
+                            )
+                        else:
+                            st.success(
+                                "✅ Storico sincronizzato con la classifica corrente."
+                            )
+
                         st.dataframe(
                             history_table.head(20),
                             use_container_width=True,
