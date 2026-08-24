@@ -1014,22 +1014,6 @@ def automatic_strategy_search(
             "mask": mask,
         }
 
-    allb_delta = num_array("_allb_delta")
-
-    mask = (~np.isnan(allb_delta)) & (allb_delta > 0)
-    if mask.any():
-        dimensions["Allibramento > media"] = {
-            "family": "_allb_delta",
-            "mask": mask,
-        }
-
-    mask = (~np.isnan(allb_delta)) & (allb_delta < 0)
-    if mask.any():
-        dimensions["Allibramento < media"] = {
-            "family": "_allb_delta",
-            "mask": mask,
-        }
-
     items = list(dimensions.items())
     results = []
     selections = {}
