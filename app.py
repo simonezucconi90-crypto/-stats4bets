@@ -1311,25 +1311,62 @@ def ensure_current_strategy_snapshot(ranking):
 
 
 
+
+def fetch_all_strategy_history_rows(page_size=1000):
+    """
+    Legge TUTTO lo storico strategy_history da Supabase con paginazione.
+
+    Supabase/PostgREST può limitare una singola select a circa 1000 righe.
+    Senza paginazione, con 50 strategie per snapshot, dopo circa 20 snapshot
+    l'app smette di vedere i nuovi dati. Questa funzione evita il problema
+    senza cancellare o modificare lo storico esistente.
+    """
+    if not use_supabase():
+        return []
+
+    client = supabase_client()
+    all_rows = []
+    offset = 0
+
+    while True:
+        try:
+            response = (
+                client.table(STRATEGY_HISTORY_TABLE)
+                .select(
+                    "snapshot_id,captured_at,rank_position,"
+                    "strategy,matches_count,roi,profit,score,signature"
+                )
+                .order("captured_at")
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            batch = response.data or []
+        except Exception:
+            return all_rows
+
+        all_rows.extend(batch)
+
+        if len(batch) < page_size:
+            break
+
+        offset += page_size
+
+        # Protezione solo contro loop anomali.
+        if offset > 200000:
+            break
+
+    return all_rows
+
+
+
 def strategy_history_summary(current_strategies=None):
     if not use_supabase():
         return pd.DataFrame(), 0
 
-    try:
-        rows = (
-            supabase_client()
-            .table(STRATEGY_HISTORY_TABLE)
-            .select(
-                "snapshot_id,captured_at,rank_position,"
-                "strategy,matches_count,roi,profit,score"
-            )
-            .order("captured_at")
-            .execute()
-            .data
-            or []
-        )
-    except Exception:
-        return pd.DataFrame(), 0
+    rows = fetch_all_strategy_history_rows()
+
+    if rows is None:
+        rows = []
 
     if not rows:
         return pd.DataFrame(), 0
@@ -3810,6 +3847,21 @@ elif page == "🧠 Trova metodo migliore":
                 history_table, snapshot_count = strategy_history_summary(
                     ranking["Strategia"].tolist()
                 )
+
+                try:
+                    _all_history_rows = fetch_all_strategy_history_rows()
+                    _real_history_rows = [
+                        r for r in _all_history_rows
+                        if not str(r.get("strategy") or "").startswith(
+                            SYSTEM_STATE_PREFIX
+                        )
+                    ]
+                    st.caption(
+                        f"📚 Storico caricato: {len(_real_history_rows)} righe reali "
+                        f"su {snapshot_count} snapshot distinti."
+                    )
+                except Exception:
+                    pass
 
                 st.markdown("### 🧭 Stabilità della classifica")
 
