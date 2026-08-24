@@ -1359,36 +1359,113 @@ def fetch_all_strategy_history_rows(page_size=1000):
 
 
 
-def strategy_history_summary(current_strategies=None):
+def strategy_history_summary(current_strategies=None, current_ranking=None):
+    """
+    Riassunto storico robusto.
+
+    Legge tutto lo storico Supabase e, se la classifica corrente non è ancora
+    rappresentata dall'ultimo snapshot persistito, aggiunge in memoria uno
+    SNAPSHOT VIRTUALE corrente.
+
+    Questo NON cancella e NON modifica lo storico esistente.
+    Serve solo a garantire che:
+    - Ultima posizione = posizione realmente visibile adesso;
+    - Top 5 % e Top 10 % includano la rilevazione corrente;
+    - la Classifica Elite non lavori su uno storico rimasto indietro.
+    """
     if not use_supabase():
         return pd.DataFrame(), 0
 
     rows = fetch_all_strategy_history_rows()
-
     if rows is None:
         rows = []
 
-    if not rows:
-        return pd.DataFrame(), 0
+    # Escludiamo gli stati tecnici.
+    real_rows = [
+        r for r in rows
+        if not str(r.get("strategy") or "").startswith(SYSTEM_STATE_PREFIX)
+    ]
 
-    hist = pd.DataFrame(rows)
+    hist = pd.DataFrame(real_rows)
 
-    if "strategy" in hist.columns:
-        hist = hist[
-            ~hist["strategy"]
-            .fillna("")
-            .astype(str)
-            .str.startswith("__SYSTEM_STATE__")
-        ].copy()
+    if hist.empty:
+        hist = pd.DataFrame(columns=[
+            "snapshot_id","captured_at","rank_position","strategy",
+            "matches_count","roi","profit","score","signature"
+        ])
+
+    # -----------------------------------------------------------
+    # SNAPSHOT CORRENTE VIRTUALE
+    # -----------------------------------------------------------
+    virtual_added = False
+
+    if (
+        current_ranking is not None
+        and isinstance(current_ranking, pd.DataFrame)
+        and not current_ranking.empty
+    ):
+        current_signature = strategy_ranking_signature(current_ranking)
+
+        saved_signatures = set()
+        if "signature" in hist.columns and not hist.empty:
+            saved_signatures = set(
+                hist["signature"]
+                .fillna("")
+                .astype(str)
+                .tolist()
+            )
+
+        # Se la classifica corrente non è già realmente salvata,
+        # la aggiungiamo SOLO in memoria per i calcoli.
+        if current_signature and current_signature not in saved_signatures:
+            now = pd.Timestamp.now(tz="UTC")
+            virtual_snapshot_id = "__CURRENT_VIRTUAL__"
+
+            virtual_rows = []
+            for position, (_, row) in enumerate(
+                current_ranking.iterrows(),
+                start=1,
+            ):
+                virtual_rows.append({
+                    "snapshot_id": virtual_snapshot_id,
+                    "captured_at": now,
+                    "rank_position": position,
+                    "strategy": str(row.get("Strategia", "")),
+                    "matches_count": int(row.get("Partite", 0) or 0),
+                    "roi": float(row.get("ROI %", 0) or 0),
+                    "profit": float(row.get("Profitto €", 0) or 0),
+                    "score": float(row.get("Punteggio", 0) or 0),
+                    "signature": current_signature,
+                })
+
+            if virtual_rows:
+                hist = pd.concat(
+                    [hist, pd.DataFrame(virtual_rows)],
+                    ignore_index=True,
+                )
+                virtual_added = True
 
     if hist.empty:
         return pd.DataFrame(), 0
 
     hist["captured_at"] = pd.to_datetime(
-        hist["captured_at"], errors="coerce", utc=True
+        hist["captured_at"],
+        errors="coerce",
+        utc=True,
     )
-    for col in ["rank_position", "matches_count", "roi", "profit", "score"]:
-        hist[col] = pd.to_numeric(hist[col], errors="coerce")
+
+    for col in [
+        "rank_position",
+        "matches_count",
+        "roi",
+        "profit",
+        "score",
+    ]:
+        if col in hist.columns:
+            hist[col] = pd.to_numeric(
+                hist[col],
+                errors="coerce",
+            )
 
     snapshot_meta = (
         hist[["snapshot_id", "captured_at"]]
@@ -1396,65 +1473,118 @@ def strategy_history_summary(current_strategies=None):
         .sort_values("captured_at")
         .reset_index(drop=True)
     )
+
     total_snapshots = len(snapshot_meta)
 
     if current_strategies:
         wanted = set(str(x) for x in current_strategies)
         strategies = [
-            s for s in hist["strategy"].dropna().astype(str).unique()
+            s
+            for s in hist["strategy"].dropna().astype(str).unique()
             if s in wanted
         ]
     else:
-        strategies = list(hist["strategy"].dropna().astype(str).unique())
+        strategies = list(
+            hist["strategy"].dropna().astype(str).unique()
+        )
 
     output = []
 
     for strategy in strategies:
-        sdf = hist[hist["strategy"].astype(str) == strategy].copy()
+        sdf = hist[
+            hist["strategy"].astype(str) == strategy
+        ].copy()
+
         if sdf.empty:
             continue
 
         first_seen = sdf["captured_at"].min()
-        eligible = snapshot_meta[snapshot_meta["captured_at"] >= first_seen]
+
+        eligible = snapshot_meta[
+            snapshot_meta["captured_at"] >= first_seen
+        ]
+
         denominator = max(1, len(eligible))
 
-        appearances = int(sdf["snapshot_id"].nunique())
-        top5 = int(
-            sdf.loc[sdf["rank_position"] <= 5, "snapshot_id"].nunique()
-        )
-        top10 = int(
-            sdf.loc[sdf["rank_position"] <= 10, "snapshot_id"].nunique()
+        appearances = int(
+            sdf["snapshot_id"].nunique()
         )
 
-        latest = sdf.sort_values("captured_at").iloc[-1]
+        top5 = int(
+            sdf.loc[
+                sdf["rank_position"] <= 5,
+                "snapshot_id",
+            ].nunique()
+        )
+
+        top10 = int(
+            sdf.loc[
+                sdf["rank_position"] <= 10,
+                "snapshot_id",
+            ].nunique()
+        )
+
+        latest = (
+            sdf.sort_values(
+                ["captured_at", "snapshot_id"]
+            )
+            .iloc[-1]
+        )
 
         output.append({
             "Strategia": strategy,
             "Rilevazioni": appearances,
-            "Top 5 %": round(top5 / denominator * 100, 1),
-            "Top 10 %": round(top10 / denominator * 100, 1),
-            "Posizione media": round(float(sdf["rank_position"].mean()), 2),
-            "Ultima posizione": int(latest["rank_position"]),
+            "Top 5 %": round(
+                top5 / denominator * 100,
+                1,
+            ),
+            "Top 10 %": round(
+                top10 / denominator * 100,
+                1,
+            ),
+            "Posizione media": round(
+                float(sdf["rank_position"].mean()),
+                2,
+            ),
+            "Ultima posizione": int(
+                latest["rank_position"]
+            ),
             "Ultimo campione": int(
                 latest["matches_count"]
-                if pd.notna(latest["matches_count"]) else 0
+                if pd.notna(latest["matches_count"])
+                else 0
             ),
             "Ultimo ROI %": round(
-                float(latest["roi"]) if pd.notna(latest["roi"]) else 0.0,
+                float(latest["roi"])
+                if pd.notna(latest["roi"])
+                else 0.0,
                 2,
             ),
             "Ultimo punteggio": round(
-                float(latest["score"]) if pd.notna(latest["score"]) else 0.0,
+                float(latest["score"])
+                if pd.notna(latest["score"])
+                else 0.0,
                 2,
             ),
+            "_virtual_current": virtual_added,
         })
 
     if not output:
         return pd.DataFrame(), total_snapshots
 
     result = pd.DataFrame(output).sort_values(
-        ["Top 5 %", "Top 10 %", "Posizione media", "Rilevazioni"],
-        ascending=[False, False, True, False],
+        [
+            "Top 5 %",
+            "Top 10 %",
+            "Posizione media",
+            "Rilevazioni",
+        ],
+        ascending=[
+            False,
+            False,
+            True,
+            False,
+        ],
     ).reset_index(drop=True)
 
     return result, total_snapshots
@@ -2579,7 +2709,19 @@ def build_strong_watchlist(ranking, history_table, snapshot_count, selections, c
         ascending=[False,False,False,False,False]
     ).head(WATCH_MAX_ROWS).reset_index(drop=True)
 
-    watch.insert(0, "Posizione", range(1, len(watch)+1))
+    # La Classifica Definitiva contiene già una colonna "Posizione".
+    # Nella watchlist vogliamo ricalcolare la posizione specifica di questa
+    # tabella, quindi rimuoviamo prima l'eventuale colonna preesistente.
+    watch = watch.drop(
+        columns=["Posizione"],
+        errors="ignore",
+    )
+
+    watch.insert(
+        0,
+        "Posizione",
+        range(1, len(watch) + 1),
+    )
     watch["Stato"] = watch["ROI ultime 50 %"].apply(
         lambda x: "🟢 Vicina all'Elite" if float(x or 0) > 0 else "🟡 Solida, recente da verificare"
     )
@@ -3845,7 +3987,8 @@ elif page == "🧠 Trova metodo migliore":
                     )
 
                 history_table, snapshot_count = strategy_history_summary(
-                    ranking["Strategia"].tolist()
+                    ranking["Strategia"].tolist(),
+                    current_ranking=ranking,
                 )
 
                 try:
@@ -3908,20 +4051,38 @@ elif page == "🧠 Trova metodo migliore":
                                 mismatch_count += 1
 
                         if mismatch_count > 0:
-                            st.warning(
-                                f"⚠️ Controllo storico: {mismatch_count} strategie "
-                                "hanno ancora un'ultima posizione diversa dalla "
-                                "classifica corrente. Premi una volta "
-                                "'Cerca migliori strategie'; lo snapshot verrà "
-                                "riallineato automaticamente."
+                            st.error(
+                                f"❌ Controllo storico: {mismatch_count} strategie "
+                                "non risultano allineate nemmeno dopo il recupero "
+                                "dello snapshot corrente."
                             )
                         else:
-                            st.success(
-                                "✅ Storico sincronizzato con la classifica corrente."
+                            virtual_used = (
+                                "_virtual_current" in history_table.columns
+                                and history_table["_virtual_current"]
+                                .fillna(False)
+                                .astype(bool)
+                                .any()
                             )
 
+                            if virtual_used:
+                                st.info(
+                                    "✅ Classifica corrente allineata ai calcoli. "
+                                    "Lo snapshot corrente è stato aggiunto in memoria "
+                                    "senza modificare né cancellare lo storico salvato."
+                                )
+                            else:
+                                st.success(
+                                    "✅ Storico salvato e classifica corrente sincronizzati."
+                                )
+
+                        history_display = history_table.drop(
+                            columns=["_virtual_current"],
+                            errors="ignore",
+                        )
+
                         st.dataframe(
-                            history_table.head(20),
+                            history_display.head(20),
                             use_container_width=True,
                             hide_index=True,
                         )
