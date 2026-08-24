@@ -2761,6 +2761,58 @@ def elite_decision_message(elite, official_state):
     )
 
 
+
+def human_strategy_name(strategy_name):
+    """Rende leggibili le condizioni dinamiche senza cambiare i nomi interni."""
+    name = str(strategy_name or "")
+    name = name.replace(
+        "Allibramento < media",
+        "Allibramento valore < media della partita"
+    )
+    name = name.replace(
+        "Allibramento > media",
+        "Allibramento valore > media della partita"
+    )
+    return name
+
+
+def add_human_strategy_column(df):
+    if df is None or df.empty or "Strategia" not in df.columns:
+        return df
+    out = df.copy()
+    out["Strategia"] = out["Strategia"].map(human_strategy_name)
+    return out
+
+
+def add_allibramento_explanation_columns(df):
+    """Aggiunge i valori operativi ALLB per capire il confronto con la media."""
+    if df is None or df.empty:
+        return df
+
+    out = df.copy()
+    allb_value = pd.to_numeric(out.get("allibramento_value"), errors="coerce")
+    allb_avg = pd.to_numeric(out.get("allibramento_avg"), errors="coerce")
+
+    out["Valore ALLB"] = allb_value.round(2)
+    out["Media ALLB"] = allb_avg.round(2)
+    out["Δ ALLB"] = (allb_value - allb_avg).round(2)
+
+    def allb_check(row):
+        value = row.get("Valore ALLB")
+        avg = row.get("Media ALLB")
+        if pd.isna(value) or pd.isna(avg):
+            return ""
+        if float(value) < float(avg):
+            return f"✅ {float(value):.2f} < {float(avg):.2f}"
+        if float(value) > float(avg):
+            return f"❌ {float(value):.2f} > {float(avg):.2f}"
+        return f"➖ {float(value):.2f} = {float(avg):.2f}"
+
+    out["Confronto ALLB"] = out.apply(allb_check, axis=1)
+    return out
+
+
+
 def editor_form(data, prefix):
     left, right = st.columns(2)
     with left:
@@ -2905,6 +2957,12 @@ elif page == "🎯 Partite da giocare":
             if v and v.lower() not in {"nan", "none"}
         )
 
+    st.info(
+        "ℹ️ 'Allibramento valore < media della partita' significa che il confronto "
+        "è fatto per ogni singola partita: Valore ALLB < Media ALLB. "
+        "Nelle tabelle trovi entrambi i valori e il confronto già calcolato."
+    )
+
     auto_tab, manual_tab = st.tabs([
         "🎯 Strategia ufficiale",
         "🎛️ Filtri manuali",
@@ -2958,7 +3016,7 @@ elif page == "🎯 Partite da giocare":
             )
         else:
             st.success(
-                f"🎯 Strategia applicata: {official}"
+                "🎯 Strategia applicata: " + human_strategy_name(official)
             )
 
             auto = apply_generated_strategy_name(
@@ -2976,7 +3034,7 @@ elif page == "🎯 Partite da giocare":
                     "Nessuna partita in attesa rispetta la strategia ufficiale."
                 )
             else:
-                show = auto.copy()
+                show = add_allibramento_explanation_columns(auto.copy())
                 show["Quota"] = pd.to_numeric(
                     show["current_odds"],
                     errors="coerce",
@@ -2984,6 +3042,7 @@ elif page == "🎯 Partite da giocare":
 
                 cols = [
                     "date","time","league","match_name","Quota",
+                    "Valore ALLB","Media ALLB","Δ ALLB","Confronto ALLB",
                     "allibramento_color","mtr","scl","cal",
                     "c_aff","c_aff_count","flbk","c_fb",
                     "qra_qa","qi_qa","status"
@@ -3239,7 +3298,7 @@ elif page == "🎯 Partite da giocare":
                 "Nessuna partita in attesa rispetta tutti i filtri selezionati."
             )
         else:
-            show = found.copy()
+            show = add_allibramento_explanation_columns(found.copy())
             show["Quota"] = pd.to_numeric(
                 show["current_odds"],
                 errors="coerce",
@@ -3251,6 +3310,7 @@ elif page == "🎯 Partite da giocare":
 
             cols = [
                 "date","time","league","match_name","Quota","Prob. 1",
+                "Valore ALLB","Media ALLB","Δ ALLB","Confronto ALLB",
                 "allibramento_color","mtr","scl","cal",
                 "c_aff","c_aff_count","flbk","c_fb",
                 "qra_qa","qi_qa","status"
@@ -4156,10 +4216,16 @@ elif page == "🧠 Trova metodo migliore":
                     )
                     if consolidated and official_currently_usable:
                         official_badge = "🟢 CONFERMATA"
-                        st.success(f'🎯 {official_badge} — {follow_state.get("official", "")}')
+                        st.success(
+                            f'🎯 {official_badge} — '
+                            f'{human_strategy_name(follow_state.get("official", ""))}'
+                        )
                     else:
                         official_badge = "⚠️ PRECEDENTE UFFICIALE / DA RIVALUTARE"
-                        st.warning(f'🎯 {official_badge} — {follow_state.get("official", "")}')
+                        st.warning(
+                            f'🎯 {official_badge} — '
+                            f'{human_strategy_name(follow_state.get("official", ""))}'
+                        )
 
                     o1, o2, o3, o4 = st.columns(4)
                     o1.metric(
@@ -4243,8 +4309,9 @@ elif page == "🧠 Trova metodo migliore":
                     else:
                         st.info(decision_message)
 
+                    elite_display = add_human_strategy_column(elite_table)
                     st.dataframe(
-                        elite_table,
+                        elite_display,
                         use_container_width=True,
                         hide_index=True,
                     )
@@ -4270,7 +4337,12 @@ elif page == "🧠 Trova metodo migliore":
                 if strong_watch.empty:
                     st.info("Nessun'altra strategia abbastanza consolidata da mostrare adesso.")
                 else:
-                    st.dataframe(strong_watch, use_container_width=True, hide_index=True)
+                    strong_watch_display = add_human_strategy_column(strong_watch)
+                    st.dataframe(
+                        strong_watch_display,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
                     st.caption(
                         f"Minimo {WATCH_MIN_MATCHES} partite, {WATCH_MIN_OBSERVATIONS} rilevazioni, "
                         f"ROI e profitto positivi, validazione ✅ e stabilità almeno "
