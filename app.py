@@ -2797,6 +2797,114 @@ def add_allibramento_explanation_columns(df):
 
 
 
+
+def monthly_strategy_statistics(df):
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    work = df[df["outcome"].isin(["V", "P"])].copy()
+    if work.empty:
+        return pd.DataFrame()
+
+    work["_date_dt"] = pd.to_datetime(work["date"], errors="coerce")
+    work = work[work["_date_dt"].notna()].copy()
+    if work.empty:
+        return pd.DataFrame()
+
+    work["_month"] = work["_date_dt"].dt.to_period("M")
+    rows = []
+    current_month = pd.Timestamp(datetime.today()).to_period("M")
+
+    for month, mdf in work.groupby("_month", sort=True):
+        s = strategy_statistics(mdf)
+        month_start = month.to_timestamp()
+        rows.append({
+            "Mese": month_start.strftime("%m/%Y"),
+            "_month_sort": month_start,
+            "Stato mese": "🟡 In corso" if month == current_month else "✅ Completo",
+            "Partite": s["closed"],
+            "Vinte": s["wins"],
+            "Perse": s["losses"],
+            "Win rate %": round(s["win_rate"], 2),
+            "Quota media": round(s["avg_odds"], 2),
+            "Puntato €": round(s["staked"], 2),
+            "Profitto €": round(s["profit"], 2),
+            "ROI %": round(s["roi"], 2),
+            "Max perdite consecutive": s["max_losing_streak"],
+        })
+
+    result = pd.DataFrame(rows).sort_values("_month_sort").reset_index(drop=True)
+    result["Profitto cumulato €"] = pd.to_numeric(
+        result["Profitto €"], errors="coerce"
+    ).fillna(0).cumsum().round(2)
+    return result
+
+
+def show_monthly_strategy_analysis(selected_df):
+    if selected_df is None or selected_df.empty:
+        st.info("Nessuna partita conclusa rispetta questa selezione.")
+        return
+
+    closed_selected = selected_df[selected_df["outcome"].isin(["V", "P"])].copy()
+    if closed_selected.empty:
+        st.info("Nessuna partita conclusa rispetta questa selezione.")
+        return
+
+    total = strategy_statistics(closed_selected)
+
+    st.markdown("### Totale strategia")
+    a,b,c,d = st.columns(4)
+    a.metric("Partite", total["closed"])
+    b.metric("Vinte", total["wins"])
+    c.metric("Perse", total["losses"])
+    d.metric("Win rate", f'{total["win_rate"]:.2f}%')
+
+    e,f,g,h = st.columns(4)
+    e.metric("Puntato", f'€ {total["staked"]:.2f}')
+    f.metric("Profitto", f'€ {total["profit"]:.2f}')
+    g.metric("ROI", f'{total["roi"]:.2f}%')
+    h.metric("Quota media", f'{total["avg_odds"]:.2f}')
+
+    monthly = monthly_strategy_statistics(closed_selected)
+    if monthly.empty:
+        st.info("Non riesco a suddividere le partite per mese.")
+        return
+
+    st.markdown("### 📅 Risultati mese per mese")
+    st.dataframe(
+        monthly.drop(columns=["_month_sort"], errors="ignore"),
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.caption(
+        "🟡 In corso = il mese non è ancora terminato, quindi profitto e ROI "
+        "non sono confrontabili alla pari con un mese completo."
+    )
+
+    st.markdown("### 💰 Profitto per mese")
+    st.bar_chart(monthly.set_index("Mese")[["Profitto €"]])
+
+    st.markdown("### 📈 Profitto cumulato per mese")
+    st.line_chart(monthly.set_index("Mese")[["Profitto cumulato €"]])
+
+    best = monthly.sort_values(
+        ["Profitto €", "ROI %"], ascending=[False, False]
+    ).iloc[0]
+    worst = monthly.sort_values(
+        ["Profitto €", "ROI %"], ascending=[True, True]
+    ).iloc[0]
+
+    c1,c2 = st.columns(2)
+    c1.success(
+        f'🏆 Miglior mese: {best["Mese"]} — € {float(best["Profitto €"]):.2f} '
+        f'— ROI {float(best["ROI %"]):.2f}%'
+    )
+    c2.warning(
+        f'📉 Peggior mese: {worst["Mese"]} — € {float(worst["Profitto €"]):.2f} '
+        f'— ROI {float(worst["ROI %"]):.2f}%'
+    )
+
+
 def editor_form(data, prefix):
     left, right = st.columns(2)
     with left:
@@ -2836,10 +2944,10 @@ st.title("📊 Stats4Bets")
 st.caption(f"Archivio e analisi partite • Archivio: {storage_label()}")
 
 page = st.sidebar.radio("Menu", [
-    "🏠 Home","🎯 Partite da giocare","⚡ Inserimento rapido","➕ Nuova partita",
-    "📋 Database","🏆 Aggiorna risultato","✏️ Modifica/Elimina","📊 Dashboard",
-    "🔎 Analisi filtri","🧪 Laboratorio Strategie","🧠 Trova metodo migliore",
-    "📥 Importa/Esporta","⚙️ Configurazione"
+    "🏠 Home","🎯 Partite da giocare","📅 Analisi mensile","⚡ Inserimento rapido",
+    "➕ Nuova partita","📋 Database","🏆 Aggiorna risultato","✏️ Modifica/Elimina",
+    "📊 Dashboard","🔎 Analisi filtri","🧪 Laboratorio Strategie",
+    "🧠 Trova metodo migliore","📥 Importa/Esporta","⚙️ Configurazione"
 ])
 
 if page == "⚡ Inserimento rapido":
@@ -2905,6 +3013,211 @@ if page == "⚡ Inserimento rapido":
             insert_match(record)
             st.success(f"Partita salvata con ID {record['id']}.")
             st.balloons()
+
+elif page == "📅 Analisi mensile":
+    st.subheader("📅 Analisi mensile strategie")
+    st.caption(
+        "Scegli una strategia già trovata dal motore oppure costruiscila manualmente. "
+        "L'app divide automaticamente profitto, ROI e risultati mese per mese."
+    )
+
+    df = get_matches()
+    closed = df[df["outcome"].isin(["V", "P"])].copy() if not df.empty else pd.DataFrame(columns=ALL_COLUMNS)
+
+    if closed.empty:
+        st.info("Servono partite concluse per fare l'analisi mensile.")
+    else:
+        strategy_tab, manual_tab = st.tabs([
+            "🏆 Strategie trovate",
+            "🎛️ Strategia personalizzata",
+        ])
+
+        with strategy_tab:
+            ranking_monthly = st.session_state.get("strategy_ranking_v2")
+            selections_monthly = st.session_state.get("strategy_selections_v2", {})
+            official_state_monthly = load_strategy_follow_state()
+
+            available_names = []
+
+            if isinstance(official_state_monthly, dict):
+                official_name = str(official_state_monthly.get("official") or "")
+                if official_name:
+                    available_names.append(("🎯 Ufficiale", official_name))
+
+            if isinstance(ranking_monthly, pd.DataFrame) and not ranking_monthly.empty:
+                hist_monthly, snap_monthly = strategy_history_summary(
+                    ranking_monthly["Strategia"].tolist(),
+                    current_ranking=ranking_monthly,
+                )
+
+                definitive_monthly = definitive_strategy_ranking(
+                    ranking_monthly,
+                    hist_monthly,
+                    snap_monthly,
+                    selections_monthly,
+                )
+
+                elite_monthly = build_elite_ranking(
+                    ranking=ranking_monthly,
+                    history_table=hist_monthly,
+                    snapshot_count=snap_monthly,
+                    selections=selections_monthly,
+                    closed=closed,
+                    official_state=official_state_monthly,
+                )
+
+                if not elite_monthly.empty:
+                    for _, row in elite_monthly.iterrows():
+                        available_names.append(("🏆 Elite", str(row["Strategia"])))
+
+                watch_monthly = build_strong_watchlist(
+                    ranking_monthly,
+                    hist_monthly,
+                    snap_monthly,
+                    selections_monthly,
+                    closed,
+                    elite_monthly,
+                )
+
+                if not watch_monthly.empty:
+                    for _, row in watch_monthly.iterrows():
+                        available_names.append(("👀 Osservazione forte", str(row["Strategia"])))
+
+                if not definitive_monthly.empty:
+                    for _, row in definitive_monthly.head(10).iterrows():
+                        available_names.append(("📊 Classifica", str(row["Strategia"])))
+
+            seen = set()
+            unique_options = []
+            for category, name in available_names:
+                if name and name not in seen:
+                    unique_options.append((category, name))
+                    seen.add(name)
+
+            if not unique_options:
+                st.info(
+                    "Non ci sono ancora strategie disponibili in questa sessione. "
+                    "Vai una volta in 'Trova metodo migliore' e premi "
+                    "'Cerca migliori strategie', oppure usa la scheda personalizzata."
+                )
+            else:
+                option_labels = [
+                    f"{category} — {human_strategy_name(name)}"
+                    for category, name in unique_options
+                ]
+                selected_option = st.selectbox(
+                    "Strategia",
+                    option_labels,
+                    key="monthly_strategy_select",
+                )
+                idx = option_labels.index(selected_option)
+                _, selected_name = unique_options[idx]
+
+                st.info("Analizzo: " + human_strategy_name(selected_name))
+
+                strategy_df = apply_generated_strategy_name(
+                    closed,
+                    selected_name,
+                )
+                show_monthly_strategy_analysis(strategy_df)
+
+        with manual_tab:
+            st.markdown("### Costruisci la strategia")
+            st.caption("Stessi filtri del Laboratorio, ma con analisi mese per mese.")
+
+            def monthly_opts(column):
+                values = closed[column].dropna().astype(str).str.strip()
+                return sorted(
+                    v for v in values.unique()
+                    if v and v.lower() not in {"nan", "none"}
+                )
+
+            a,b,c = st.columns(3)
+            allb_m=a.multiselect("Allibramento",monthly_opts("allibramento_color"),key="monthly_allb")
+            mtr_m=b.multiselect("MTR",monthly_opts("mtr"),key="monthly_mtr")
+            scl_m=c.multiselect("SCL",monthly_opts("scl"),key="monthly_scl")
+
+            a,b,c = st.columns(3)
+            cal_m=a.multiselect("CAL",monthly_opts("cal"),key="monthly_cal")
+            caff_m=b.multiselect("C. AFF.",monthly_opts("c_aff"),key="monthly_caff")
+            flbk_m=c.multiselect("FLBK",monthly_opts("flbk"),key="monthly_flbk")
+
+            a,b,c = st.columns(3)
+            cfb_m=a.multiselect("C. FB.",monthly_opts("c_fb"),key="monthly_cfb")
+            qra_m=b.multiselect("QRA/QA",monthly_opts("qra_qa"),key="monthly_qra")
+            qi_m=c.multiselect("QI/QA",monthly_opts("qi_qa"),key="monthly_qi")
+
+            a,b = st.columns(2)
+            status_m=a.multiselect("STATUS",monthly_opts("status"),key="monthly_status")
+            leagues_m=b.multiselect("Campionati",monthly_opts("league"),key="monthly_leagues")
+
+            odds_m=pd.to_numeric(closed["current_odds"],errors="coerce").dropna()
+            probs_m=pd.to_numeric(closed["prob_1"],errors="coerce").dropna()
+
+            a,b=st.columns(2)
+            min_odds_m=a.number_input("Quota minima",value=float(odds_m.min()) if not odds_m.empty else 1.20,step=0.01,key="monthly_min_odds")
+            max_odds_m=b.number_input("Quota massima",value=float(odds_m.max()) if not odds_m.empty else 2.00,step=0.01,key="monthly_max_odds")
+
+            a,b=st.columns(2)
+            min_prob_m=a.number_input("Probabilità 1 minima",value=float(probs_m.min()) if not probs_m.empty else 0.0,step=0.5,key="monthly_min_prob")
+            max_prob_m=b.number_input("Probabilità 1 massima",value=float(probs_m.max()) if not probs_m.empty else 100.0,step=0.5,key="monthly_max_prob")
+
+            ccvals_m=pd.to_numeric(closed["c_aff_count"],errors="coerce").dropna()
+            use_cc_m=st.checkbox("Usa filtro C.AFF. COUNT",value=False,key="monthly_use_cc")
+
+            if ccvals_m.empty:
+                min_cc_m=max_cc_m=0
+            else:
+                a,b=st.columns(2)
+                min_cc_m=a.number_input("C.AFF. COUNT minimo",min_value=0,value=int(ccvals_m.min()),step=1,key="monthly_min_cc")
+                max_cc_m=b.number_input("C.AFF. COUNT massimo",min_value=0,value=int(ccvals_m.max()),step=1,key="monthly_max_cc")
+
+            methods_m=st.multiselect(
+                "Metodi associati richiesti",
+                list(METHOD_COLUMNS),
+                key="monthly_methods",
+            )
+
+            filters_m={
+                "allibramento_color":allb_m,
+                "mtr":mtr_m,
+                "scl":scl_m,
+                "cal":cal_m,
+                "c_aff":caff_m,
+                "flbk":flbk_m,
+                "c_fb":cfb_m,
+                "qra_qa":qra_m,
+                "qi_qa":qi_m,
+                "status":status_m,
+                "league":leagues_m,
+            }
+
+            monthly_filtered=apply_strategy_filters(
+                closed,
+                filters_m,
+                min_odds_m,
+                max_odds_m,
+                min_prob_m,
+                max_prob_m,
+            )
+
+            if use_cc_m and not ccvals_m.empty:
+                cc_numeric_m=pd.to_numeric(monthly_filtered["c_aff_count"],errors="coerce")
+                monthly_filtered=monthly_filtered[
+                    (cc_numeric_m>=min_cc_m)&(cc_numeric_m<=max_cc_m)
+                ]
+
+            for method in methods_m:
+                method_col=METHOD_COLUMNS[method]
+                monthly_filtered=monthly_filtered[
+                    pd.to_numeric(
+                        monthly_filtered[method_col],
+                        errors="coerce",
+                    ).fillna(0)==1
+                ]
+
+            show_monthly_strategy_analysis(monthly_filtered)
+
 
 elif page == "🎯 Partite da giocare":
     st.subheader("🎯 Partite da giocare")
