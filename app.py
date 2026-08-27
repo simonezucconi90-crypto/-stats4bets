@@ -3835,20 +3835,106 @@ elif page == "🏆 Aggiorna risultato":
 elif page == "✏️ Modifica/Elimina":
     st.subheader("✏️ Modifica o elimina")
     df = get_matches()
+
     if df.empty:
         st.info("Nessuna partita.")
     else:
-        labels = {f'{r["id"]} — {r["match_name"]}':r["id"] for _,r in df.iterrows()}
+        labels = {
+            f'{r["id"]} — {r["match_name"]}': r["id"]
+            for _, r in df.iterrows()
+        }
+
         selected = st.selectbox("Scegli partita", list(labels))
         mid = labels[selected]
-        record = df[df["id"]==mid].iloc[0].to_dict()
+        record = df[df["id"] == mid].iloc[0].to_dict()
+
         edited = editor_form(record, f"edit_{mid}")
-        c1,c2 = st.columns(2)
+
+        st.markdown("### 🏁 Esito e risultato")
+
+        current_outcome = str(record.get("outcome") or "")
+        outcome_options = ["", "V", "P"]
+        outcome_index = (
+            outcome_options.index(current_outcome)
+            if current_outcome in outcome_options
+            else 0
+        )
+
+        edited_outcome = st.selectbox(
+            "Esito finale",
+            outcome_options,
+            index=outcome_index,
+            format_func=lambda x: {
+                "": "⏳ In attesa",
+                "V": "🟢 Vinta",
+                "P": "🔴 Persa",
+            }.get(x, x),
+            key=f"edit_{mid}_outcome",
+        )
+
+        edited_score = st.text_input(
+            "Risultato finale",
+            value=str(record.get("final_score") or ""),
+            key=f"edit_{mid}_final_score",
+        )
+
+        stake_value = float(
+            edited.get("stake")
+            or record.get("stake")
+            or 20.0
+        )
+        odds_value = float(
+            edited.get("played_odds")
+            or record.get("played_odds")
+            or 0.0
+        )
+
+        if edited_outcome == "V":
+            calculated_gross = round(stake_value * odds_value, 2)
+            calculated_profit = round(
+                calculated_gross - stake_value,
+                2,
+            )
+        elif edited_outcome == "P":
+            calculated_gross = 0.0
+            calculated_profit = round(-stake_value, 2)
+        else:
+            calculated_gross = None
+            calculated_profit = None
+
+        if edited_outcome in {"V", "P"}:
+            st.info(
+                f"Ricalcolo automatico → "
+                f"Ritorno lordo: € {calculated_gross:.2f} • "
+                f"Profitto: € {calculated_profit:.2f}"
+            )
+        else:
+            st.caption(
+                "Se imposti la partita come in attesa, "
+                "ritorno lordo e profitto verranno svuotati."
+            )
+
+        c1, c2 = st.columns(2)
+
         if c1.button("💾 Salva modifiche", type="primary"):
-            edited.pop("id",None)
+            edited.pop("id", None)
+
+            edited["outcome"] = edited_outcome if edited_outcome else None
+            edited["final_score"] = (
+                edited_score.strip()
+                if edited_score.strip()
+                else None
+            )
+            edited["gross_return"] = calculated_gross
+            edited["profit"] = calculated_profit
+
             update_record(mid, edited)
-            st.success("Modifiche salvate.")
+
+            st.success(
+                "✅ Modifiche salvate e profitto ricalcolato."
+            )
             st.rerun()
+
         if c2.button("🗑️ Elimina partita"):
             delete_record(mid)
             st.success("Partita eliminata.")
