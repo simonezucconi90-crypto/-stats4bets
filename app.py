@@ -3951,21 +3951,27 @@ elif page == "✏️ Modifica/Elimina":
         c1, c2 = st.columns(2)
 
         if c1.button("💾 Salva modifiche", type="primary"):
-            edited.pop("id", None)
+            # Per correggere un esito aggiorniamo SOLO i campi necessari.
+            # In questo modo Supabase non deve validare nuovamente tutta
+            # la riga e non può bloccarsi per un altro campo preesistente.
+            result_update = {
+                "outcome": edited_outcome if edited_outcome else None,
+                "final_score": (
+                    edited_score.strip()
+                    if edited_score.strip()
+                    else None
+                ),
+                "gross_return": calculated_gross,
+                "profit": calculated_profit,
+            }
 
-            edited["outcome"] = edited_outcome if edited_outcome else None
-            edited["final_score"] = (
-                edited_score.strip()
-                if edited_score.strip()
-                else None
+            update_record(
+                mid,
+                result_update,
             )
-            edited["gross_return"] = calculated_gross
-            edited["profit"] = calculated_profit
-
-            update_record(mid, edited)
 
             st.success(
-                "✅ Modifiche salvate e profitto ricalcolato."
+                "✅ Esito, risultato e profitto corretti."
             )
             st.rerun()
 
