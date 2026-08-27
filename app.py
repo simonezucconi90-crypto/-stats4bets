@@ -307,17 +307,51 @@ def save_record(record):
             con.commit()
 
 def update_record(match_id, values):
-    values = {k: v for k, v in values.items() if k in ALL_COLUMNS}
+    # Tiene solo colonne valide e converte tutti i valori in tipi
+    # compatibili con JSON/PostgREST/Supabase.
+    clean_values = {}
+
+    for key, value in values.items():
+        if key not in ALL_COLUMNS:
+            continue
+
+        # pd.NA / NaN / NaT -> NULL su Supabase
+        try:
+            if pd.isna(value):
+                value = None
+        except Exception:
+            pass
+
+        # Tipi NumPy -> tipi Python standard
+        if isinstance(value, np.generic):
+            value = value.item()
+
+        # Timestamp/date-like -> stringa ISO
+        if isinstance(value, (pd.Timestamp, datetime)):
+            value = value.isoformat()
+
+        clean_values[key] = value
+
+    if not clean_values:
+        return
+
     if use_supabase():
-        supabase_client().table("matches").update(values).eq("id", match_id).execute()
+        (
+            supabase_client()
+            .table("matches")
+            .update(clean_values)
+            .eq("id", str(match_id))
+            .execute()
+        )
     else:
-        sets = ",".join([f"{k}=?" for k in values])
+        sets = ",".join([f"{k}=?" for k in clean_values])
         with sqlite_connection() as con:
             con.execute(
                 f"UPDATE matches SET {sets} WHERE id=?",
-                list(values.values()) + [match_id],
+                list(clean_values.values()) + [match_id],
             )
             con.commit()
+
 
 def delete_record(match_id):
     if use_supabase():
