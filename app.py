@@ -873,6 +873,62 @@ def add_strategy_derived_columns(df):
     return out
 
 
+
+def official_operational_status(df):
+    """
+    Stato operativo della strategia ufficiale.
+    Non cambia la strategia ufficiale: misura solo la salute recente.
+    """
+    closed = df[df["outcome"].isin(["V", "P"])].copy()
+    if closed.empty:
+        return {
+            "status": "⚪ DATI INSUFFICIENTI",
+            "roi20": 0.0,
+            "roi50": 0.0,
+            "drawdown_eur": 0.0,
+            "drawdown_pct": 0.0,
+        }
+
+    closed = closed.sort_values(["date", "time", "id"]).copy()
+
+    last20 = closed.tail(20)
+    last50 = closed.tail(50)
+    roi20 = float(summary(last20)["roi"]) if not last20.empty else 0.0
+    roi50 = float(summary(last50)["roi"]) if not last50.empty else 0.0
+
+    profits = pd.to_numeric(closed["profit"], errors="coerce").fillna(0.0)
+    cumulative = profits.cumsum()
+    peak = float(cumulative.cummax().max()) if not cumulative.empty else 0.0
+    current = float(cumulative.iloc[-1]) if not cumulative.empty else 0.0
+    drawdown_eur = max(0.0, peak - current)
+    drawdown_pct = (drawdown_eur / peak * 100.0) if peak > 0 else 0.0
+
+    # ROSSO solo con deterioramento contemporaneo su breve, medio periodo
+    # e drawdown molto importante: evita stop per poche sconfitte casuali.
+    if (
+        len(closed) >= 50
+        and roi20 <= -10.0
+        and roi50 <= -5.0
+        and drawdown_pct >= 50.0
+    ):
+        status = "🔴 SOSPENDI"
+    elif (
+        roi20 < 0.0
+        or roi50 < 0.0
+        or drawdown_pct >= 35.0
+    ):
+        status = "🟡 SEGUI CON CAUTELA"
+    else:
+        status = "🟢 SEGUI"
+
+    return {
+        "status": status,
+        "roi20": roi20,
+        "roi50": roi50,
+        "drawdown_eur": drawdown_eur,
+        "drawdown_pct": drawdown_pct,
+    }
+
 def stability_statistics(df):
     if df.empty:
         return {"positive_blocks":0,"total_blocks":0,"stability_pct":0.0,"worst_block_roi":0.0}
@@ -4673,6 +4729,73 @@ elif page == "🧠 Trova metodo migliore":
                         "sono ricalcolati in tempo reale sul database attuale "
                         "con gli stessi identici filtri usati dal motore."
                     )
+
+                    # Stato operativo: separato dalla scelta della strategia ufficiale.
+                    official_name_now = str(
+                        follow_state.get("official") or ""
+                    )
+                    official_selected_now = (
+                        apply_generated_strategy_name(
+                            closed,
+                            official_name_now,
+                        )
+                        if official_name_now
+                        else pd.DataFrame()
+                    )
+                    health = official_operational_status(
+                        official_selected_now
+                    )
+
+                    st.markdown("#### 🚦 Stato operativo dell'ufficiale")
+
+                    if health["status"].startswith("🟢"):
+                        st.success(
+                            "🟢 SEGUI — andamento recente compatibile "
+                            "con una strategia ancora sana."
+                        )
+                    elif health["status"].startswith("🟡"):
+                        st.warning(
+                            "🟡 SEGUI CON CAUTELA — la strategia resta "
+                            "ufficiale, ma l'andamento recente è deteriorato."
+                        )
+                    elif health["status"].startswith("🔴"):
+                        st.error(
+                            "🔴 SOSPENDI — deterioramento forte e persistente. "
+                            "Non giocare nuove selezioni dell'ufficiale finché "
+                            "lo stato operativo non migliora."
+                        )
+                    else:
+                        st.info("⚪ Dati insufficienti per lo stato operativo.")
+
+                    h1, h2, h3, h4 = st.columns(4)
+                    h1.metric("ROI ultime 20", f'{health["roi20"]:.2f}%')
+                    h2.metric("ROI ultime 50", f'{health["roi50"]:.2f}%')
+                    h3.metric(
+                        "Drawdown dal massimo",
+                        f'€ {health["drawdown_eur"]:.2f}',
+                    )
+                    h4.metric(
+                        "Drawdown %",
+                        f'{health["drawdown_pct"]:.1f}%',
+                    )
+
+                    with st.expander("ℹ️ Come viene deciso lo stato operativo"):
+                        st.write(
+                            "🟢 SEGUI: ROI recente non negativo e drawdown sotto il 35%."
+                        )
+                        st.write(
+                            "🟡 SEGUI CON CAUTELA: almeno uno tra ROI ultime 20, "
+                            "ROI ultime 50 o drawdown segnala deterioramento."
+                        )
+                        st.write(
+                            "🔴 SOSPENDI: con almeno 50 partite servono insieme "
+                            "ROI ultime 20 ≤ -10%, ROI ultime 50 ≤ -5% e "
+                            "drawdown dal massimo ≥ 50%."
+                        )
+                        st.caption(
+                            "Lo stato operativo NON sostituisce automaticamente "
+                            "la strategia ufficiale e NON modifica lo storico."
+                        )
 
                     challenger = str(follow_state.get("challenger") or "")
                     streak = int(
