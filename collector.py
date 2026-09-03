@@ -96,6 +96,12 @@ def clean(value):
     return re.sub(r"\s+", " ", value or "").strip()
 
 
+def parse_number(value, default=0.0):
+    value = clean(str(value)).replace(",", ".")
+    match = re.search(r"(?<!\d)(\d+(?:\.\d+)?)(?!\d)", value)
+    return float(match.group(1)) if match else default
+
+
 def date_to_iso(value):
     match = re.fullmatch(r"(\d{2})-(\d{2})-(\d{2})", value)
     if not match:
@@ -139,7 +145,8 @@ def parse_list(html):
 
         prediction_spans = blocks[3].find_all("span", recursive=False)
         prediction = clean(prediction_spans[0].get_text(" ", strip=True)) if prediction_spans else ""
-        list_odds = clean(prediction_spans[1].get_text(" ", strip=True)).replace(",", ".") if len(prediction_spans) > 1 else ""
+        list_odds_text = clean(prediction_spans[1].get_text(" ", strip=True)) if len(prediction_spans) > 1 else ""
+        list_odds = parse_number(list_odds_text)
 
         detail_link = card.select_one('a[href*="statistiche.php?id="]')
         detail_url = urljoin(TARGET_URL, detail_link.get("href")) if detail_link else ""
@@ -159,7 +166,7 @@ def parse_list(html):
             "away_team": away,
             "match_name": f"{home} - {away}".strip(" -"),
             "selected_by_ale": prediction,
-            "list_odds": float(list_odds) if list_odds else 0.0,
+            "list_odds": list_odds,
             "detail_url": detail_url,
         })
 
@@ -192,13 +199,10 @@ def colour_after(text, label):
 
 def parse_detail(html, base):
     text = flat_text(html)
-    # Numero di Comparazioni Affini, es. "1861 C. AFF."
-    c_aff_count_match = re.search(
-        r"\b(\d+)\s+C\.\s*AFF\.",
-        text,
-        re.I
-    )
+
+    c_aff_count_match = re.search(r"\b(\d+)\s+C\.\s*AFF\.", text, re.I)
     c_aff_count = int(c_aff_count_match.group(1)) if c_aff_count_match else None
+
     probability = re.search(
         r"PROBABILITA['’]?\s*1X2.*?\b1\s+X\s+2\s+"
         r"(\d+(?:[.,]\d+)?)%\s+(\d+(?:[.,]\d+)?)%\s+(\d+(?:[.,]\d+)?)%",
@@ -220,7 +224,6 @@ def parse_detail(html, base):
     allib_colour = allibramento.group(2).upper() if allibramento else ""
     allib_avg = number_after(text, r"ALLIBRAMENTO MEDIO")
 
-    # Sono salvati solo indicatori colore validi; valori ambigui restano vuoti.
     indicators = {
         "c_aff": colour_after(text, r"C\.\s*AFF\."),
         "flbk": colour_after(text, r"(?:FLBK|C\.\s*FLB\.)"),
@@ -307,27 +310,22 @@ def save_to_supabase(records):
         payload.pop("list_odds", None)
 
         if existing:
-            # Snapshot immutabile:
-            # se la partita esiste già, NON viene modificata nessuna colonna.
-            # Risultato, esito e profitto sono gestiti esclusivamente
-            # dal workflow separato "Aggiorna risultati e profitti".
             print(
                 f'SALTATA: source_match_id={source_id} già presente '
                 f'con id={existing[0]["id"]}'
             )
             updated += 1
             continue
-        else:
-            payload["id"] = next_internal_id(client)
 
-            # Congela la quota e la puntata al primo inserimento.
-            frozen_odds = float(payload.get("current_odds") or 0)
-            payload["current_odds"] = frozen_odds
-            payload["played_odds"] = frozen_odds
-            payload["stake"] = 20.0
+        payload["id"] = next_internal_id(client)
 
-            client.table("matches").insert(payload).execute()
-            inserted += 1
+        frozen_odds = float(payload.get("current_odds") or 0)
+        payload["current_odds"] = frozen_odds
+        payload["played_odds"] = frozen_odds
+        payload["stake"] = 20.0
+
+        client.table("matches").insert(payload).execute()
+        inserted += 1
 
     return inserted, updated
 
