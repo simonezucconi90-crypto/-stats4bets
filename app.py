@@ -4179,6 +4179,9 @@ elif page == "🧪 Laboratorio Strategie":
             qra = c8.multiselect("QRA/QA", opts("qra_qa"))
             qi = c9.multiselect("QI/QA", opts("qi_qa"))
 
+            c10, _, _ = st.columns(3)
+            status = c10.multiselect("STATUS", opts("status"), key="lab_status")
+
             st.markdown("#### Numero comparazioni C. AFF.")
 
             caff_count_values = pd.to_numeric(
@@ -4243,6 +4246,7 @@ elif page == "🧪 Laboratorio Strategie":
             "c_fb": cfb,
             "qra_qa": qra,
             "qi_qa": qi,
+            "status": status,
             "league": leagues,
         }
 
@@ -4288,7 +4292,7 @@ elif page == "🧪 Laboratorio Strategie":
             shown = detail[[
                 "date", "time", "league", "match_name", "Quota", "Prob. 1",
                 "c_aff", "c_aff_count",
-                "allibramento_color", "mtr", "scl", "cal", "Esito",
+                "allibramento_color", "mtr", "scl", "cal", "status", "Esito",
                 "final_score", "Profitto €"
             ]].rename(columns={
                 "date": "Data",
@@ -4301,6 +4305,7 @@ elif page == "🧪 Laboratorio Strategie":
                 "mtr": "MTR",
                 "scl": "SCL",
                 "cal": "CAL",
+                "status": "STATUS",
                 "final_score": "Risultato"
             })
 
