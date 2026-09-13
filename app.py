@@ -5093,9 +5093,11 @@ elif page == "🧠 Trova metodo migliore":
             if chosen:
                 compare_rows = []
                 for label in chosen:
-                    sid = strategy_map[label]
-                    idx = selections.get(sid, [])
-                    sdf = closed.loc[closed.index.intersection(idx)].copy()
+                    compared_strategy = strategy_map[label]
+                    sdf = apply_generated_strategy_name(
+                        closed,
+                        compared_strategy["name"],
+                    )
                     ss = strategy_statistics(sdf)
                     compare_rows.append({
                         "Strategia": label.split(" | ")[0],
