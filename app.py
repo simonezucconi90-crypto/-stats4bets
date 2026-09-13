@@ -3518,7 +3518,7 @@ elif page == "🎯 Partite da giocare":
             key="play_qi",
         )
 
-                a,b = st.columns(2)
+        a,b = st.columns(2)
         status = a.multiselect(
             "STATUS",
             popts("status"),
@@ -3661,9 +3661,9 @@ elif page == "🎯 Partite da giocare":
                 max_prob,
             )
             if value_negativo:
-                found = add_allibramento_explanation_columns(found)
                 found = found[
-                    pd.to_numeric(found["Δ ALLB"], errors="coerce") < 0
+                    pd.to_numeric(found["allibramento_value"], errors="coerce")
+                    < pd.to_numeric(found["allibramento_avg"], errors="coerce")
                 ]
             if use_cc and not ccvals.empty:
                 cc = pd.to_numeric(
