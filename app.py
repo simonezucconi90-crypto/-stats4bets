@@ -3531,7 +3531,7 @@ elif page == "🎯 Partite da giocare":
         )
 
         value_negativo = st.checkbox(
-            "Solo Value negativo (Δ ALLB < 0)",
+            "Solo Value negativo (value rispetto alla quota reale < 0)",
             value=False,
             key="play_value_negativo",
         )
@@ -3661,10 +3661,14 @@ elif page == "🎯 Partite da giocare":
                 max_prob,
             )
             if value_negativo:
-                found = found[
-                    pd.to_numeric(found["allibramento_value"], errors="coerce")
-                    < pd.to_numeric(found["allibramento_avg"], errors="coerce")
-                ]
+                # Usa la stessa identica definizione del motore automatico:
+                # value negativo = quota attuale inferiore alla quota reale.
+                found = add_strategy_derived_columns(found)
+                value_pct = pd.to_numeric(
+                    found["_value_vs_fair_pct"],
+                    errors="coerce",
+                )
+                found = found[value_pct < 0]
             if use_cc and not ccvals.empty:
                 cc = pd.to_numeric(
                     found["c_aff_count"],
@@ -4925,7 +4929,10 @@ elif page == "🧠 Trova metodo migliore":
                 f'{row["Strategia"]} | '
                 f'ROI {row["ROI %"]:.2f}% | '
                 f'€ {row["Profitto €"]:.2f} | '
-                f'{int(row["Partite"])} partite': row["ID"]
+                f'{int(row["Partite"])} partite': {
+                    "id": row["ID"],
+                    "name": str(row["Strategia"]),
+                }
                 for _, row in ranking.iterrows()
             }
 
@@ -4934,11 +4941,16 @@ elif page == "🧠 Trova metodo migliore":
                 list(strategy_map.keys()),
                 key="strategy_detail_v2",
             )
-            strategy_id = strategy_map[selected_label]
-            selected_indices = selections.get(strategy_id, [])
-            selected_df = closed.loc[
-                closed.index.intersection(selected_indices)
-            ].copy()
+            selected_strategy = strategy_map[selected_label]
+            strategy_id = selected_strategy["id"]
+            strategy_name = selected_strategy["name"]
+
+            # Ricalcolo sempre le partite concluse sul database attuale.
+            # Non dipendiamo dagli indici memorizzati dall'ultima ricerca.
+            selected_df = apply_generated_strategy_name(
+                closed,
+                strategy_name,
+            )
 
             if not selected_df.empty:
                 stats = strategy_statistics(selected_df)
@@ -5003,6 +5015,70 @@ elif page == "🧠 Trova metodo migliore":
                 st.markdown("### 📈 Profitto cumulato")
                 st.line_chart(
                     curve.set_index("Progressivo")["Profitto cumulato"]
+                )
+
+            # Mostra anche le partite ancora aperte che rispettano
+            # esattamente la stessa regola della strategia selezionata.
+            pending_now = (
+                df[~df["outcome"].isin(["V", "P"])].copy()
+                if not df.empty
+                else pd.DataFrame(columns=ALL_COLUMNS)
+            )
+            selected_pending = apply_generated_strategy_name(
+                pending_now,
+                strategy_name,
+            )
+
+            st.markdown("### ⏳ Partite attuali da giocare")
+            st.metric(
+                "Partite in attesa compatibili",
+                len(selected_pending),
+            )
+            st.caption(
+                "Queste partite rispettano oggi la strategia selezionata, "
+                "ma entreranno nelle statistiche soltanto dopo l'inserimento dell'esito."
+            )
+
+            if selected_pending.empty:
+                st.info(
+                    "Nessuna partita in attesa rispetta questa strategia."
+                )
+            else:
+                upcoming = selected_pending.copy()
+                upcoming["Quota"] = pd.to_numeric(
+                    upcoming["current_odds"],
+                    errors="coerce",
+                ).round(2)
+                upcoming["Quota reale"] = pd.to_numeric(
+                    upcoming["fair_odds"],
+                    errors="coerce",
+                ).round(2)
+                upcoming["Value %"] = pd.to_numeric(
+                    upcoming["_value_vs_fair_pct"],
+                    errors="coerce",
+                ).round(2)
+
+                upcoming = upcoming[[
+                    "date", "time", "league", "match_name",
+                    "Quota", "Quota reale", "Value %",
+                    "mtr", "qi_qa", "status",
+                ]].rename(columns={
+                    "date": "Data",
+                    "time": "Ora",
+                    "league": "Campionato",
+                    "match_name": "Partita",
+                    "mtr": "MTR",
+                    "qi_qa": "QI/QA",
+                    "status": "STATUS",
+                })
+
+                st.dataframe(
+                    upcoming.sort_values(
+                        ["Data", "Ora"],
+                        ascending=[True, True],
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
                 )
 
             st.markdown("### ⚖️ Confronta fino a 3 strategie")
