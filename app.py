@@ -3528,6 +3528,10 @@ elif page == "🎯 Partite da giocare":
             "Campionati",
             popts("league"),
             key="play_leagues",
+            value_negativo = st.checkbox(
+            "Solo Value negativo (Δ ALLB < 0)",
+            value=False,
+            key="play_value_negativo",
         )
 
         st.markdown("### Quota e probabilità")
@@ -3654,7 +3658,11 @@ elif page == "🎯 Partite da giocare":
                 min_prob,
                 max_prob,
             )
-
+            if value_negativo:
+                found = add_allibramento_explanation_columns(found)
+                found = found[
+                    pd.to_numeric(found["Δ ALLB"], errors="coerce") < 0
+                ]
             if use_cc and not ccvals.empty:
                 cc = pd.to_numeric(
                     found["c_aff_count"],
