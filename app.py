@@ -3554,36 +3554,22 @@ elif page == "🎯 Partite da giocare":
             else pd.Series(dtype=float)
         )
 
-        a,b = st.columns(2)
-        min_odds = a.number_input(
-            "Quota minima",
-            value=float(odds.min())
-            if not odds.empty else 1.20,
-            step=0.01,
-            key="play_min_odds",
+                a,b = st.columns(2)
+        status = a.multiselect(
+            "STATUS",
+            popts("status"),
+            key="play_status",
         )
-        max_odds = b.number_input(
-            "Quota massima",
-            value=float(odds.max())
-            if not odds.empty else 2.00,
-            step=0.01,
-            key="play_max_odds",
+        leagues = b.multiselect(
+            "Campionati",
+            popts("league"),
+            key="play_leagues",
         )
 
-        a,b = st.columns(2)
-        min_prob = a.number_input(
-            "Probabilità 1 minima",
-            value=float(probs.min())
-            if not probs.empty else 0.0,
-            step=0.5,
-            key="play_min_prob",
-        )
-        max_prob = b.number_input(
-            "Probabilità 1 massima",
-            value=float(probs.max())
-            if not probs.empty else 100.0,
-            step=0.5,
-            key="play_max_prob",
+        value_negativo = st.checkbox(
+            "Solo Value negativo (Δ ALLB < 0)",
+            value=False,
+            key="play_value_negativo",
         )
 
         st.markdown("### C.AFF. COUNT")
