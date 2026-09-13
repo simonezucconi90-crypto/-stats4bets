@@ -759,7 +759,9 @@ def apply_generated_strategy_name(df, strategy_name):
             continue
 
         if condition == "Value negativo":
-            filtered = filtered[value < 0]
+            filtered = filtered[
+                filtered["_value_negative"].fillna(False).astype(bool)
+            ]
             continue
 
         allb_delta = pd.to_numeric(
@@ -869,7 +871,40 @@ def add_strategy_derived_columns(df):
     out.loc[(fair <= 0) | fair.isna() | current.isna(), "_value_vs_fair_pct"] = pd.NA
 
     out["_allb_delta"] = allb_value - allb_avg
-    out.loc[allb_value.isna() | allb_avg.isna(), "_allb_delta"] = pd.NA
+    out.loc[
+        allb_value.isna()
+        | allb_avg.isna()
+        | (allb_value <= 0)
+        | (allb_avg <= 0),
+        "_allb_delta",
+    ] = pd.NA
+
+    # Definizione unica e completa di "Value negativo".
+    # 1) Se la quota reale è disponibile, usa quota attuale < quota reale.
+    # 2) Se fair_odds manca/vale 0 (caso frequente nel database storico),
+    #    usa il segnale equivalente disponibile al momento della raccolta:
+    #    allibramento_value < allibramento_avg.
+    # In questo modo le righe non vengono eliminate solo perché fair_odds=0
+    # e motore, dettagli e Partite da giocare usano lo stesso universo.
+    fair_available = fair.notna() & (fair > 0) & current.notna()
+    value_negative = pd.Series(False, index=out.index, dtype=bool)
+    value_negative.loc[fair_available] = (
+        out.loc[fair_available, "_value_vs_fair_pct"] < 0
+    ).fillna(False)
+    fallback_available = (
+        ~fair_available
+        & out["_allb_delta"].notna()
+    )
+    value_negative.loc[fallback_available] = (
+        out.loc[fallback_available, "_allb_delta"] < 0
+    ).fillna(False)
+
+    out["_value_negative"] = value_negative
+    out["_value_negative_source"] = np.select(
+        [fair_available, fallback_available],
+        ["quota reale", "allibramento"],
+        default="non disponibile",
+    )
     return out
 
 
@@ -1097,11 +1132,16 @@ def automatic_strategy_search(
                 "mask": mask,
             }
 
-    mask = (~np.isnan(value_series)) & (value_series < 0)
-    if mask.any():
+    value_negative = (
+        closed["_value_negative"]
+        .fillna(False)
+        .astype(bool)
+        .to_numpy()
+    )
+    if value_negative.any():
         dimensions["Value negativo"] = {
-            "family": "_value_vs_fair_pct",
-            "mask": mask,
+            "family": "_value_negative",
+            "mask": value_negative,
         }
 
     items = list(dimensions.items())
@@ -3531,7 +3571,7 @@ elif page == "🎯 Partite da giocare":
         )
 
         value_negativo = st.checkbox(
-            "Solo Value negativo (value rispetto alla quota reale < 0)",
+            "Solo Value negativo (quota reale; fallback allibramento)",
             value=False,
             key="play_value_negativo",
         )
@@ -3661,14 +3701,13 @@ elif page == "🎯 Partite da giocare":
                 max_prob,
             )
             if value_negativo:
-                # Usa la stessa identica definizione del motore automatico:
-                # value negativo = quota attuale inferiore alla quota reale.
+                # Stessa definizione centralizzata del motore automatico.
+                # Se fair_odds non è disponibile, usa il confronto
+                # allibramento_value < allibramento_avg.
                 found = add_strategy_derived_columns(found)
-                value_pct = pd.to_numeric(
-                    found["_value_vs_fair_pct"],
-                    errors="coerce",
-                )
-                found = found[value_pct < 0]
+                found = found[
+                    found["_value_negative"].fillna(False).astype(bool)
+                ]
             if use_cc and not ccvals.empty:
                 cc = pd.to_numeric(
                     found["c_aff_count"],
