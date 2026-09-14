@@ -3212,6 +3212,18 @@ elif page == "📅 Analisi mensile":
             selections_monthly = st.session_state.get("strategy_selections_v2", {})
             official_state_monthly = load_strategy_follow_state()
 
+            if not isinstance(ranking_monthly, pd.DataFrame) or ranking_monthly.empty:
+                with st.spinner("Ricostruisco le strategie disponibili..."):
+                    ranking_monthly, selections_monthly = automatic_strategy_search(
+                        closed,
+                        min_sample=min(10, max(1, len(closed))),
+                        max_filters=3,
+                        top_n=50,
+                        validation_ratio=0.30,
+                    )
+                    st.session_state["strategy_ranking_v2"] = ranking_monthly
+                    st.session_state["strategy_selections_v2"] = selections_monthly
+
             available_names = []
 
             if isinstance(official_state_monthly, dict):
@@ -3262,23 +3274,47 @@ elif page == "📅 Analisi mensile":
                     for _, row in definitive_monthly.head(10).iterrows():
                         available_names.append(("📊 Classifica", str(row["Strategia"])))
 
-            seen = set()
-            unique_options = []
-            for category, name in available_names:
-                if name and name not in seen:
-                    unique_options.append((category, name))
-                    seen.add(name)
+            category_order = [
+                "🏆 Elite",
+                "🎯 Ufficiale",
+                "👀 Osservazione forte",
+                "📊 Classifica",
+            ]
+            available_categories = [
+                category
+                for category in category_order
+                if any(
+                    item_category == category and item_name
+                    for item_category, item_name in available_names
+                )
+            ]
 
-            if not unique_options:
+            if not available_categories:
                 st.info(
-                    "Non ci sono ancora strategie disponibili in questa sessione. "
-                    "Vai una volta in 'Trova metodo migliore' e premi "
-                    "'Cerca migliori strategie', oppure usa la scheda personalizzata."
+                    "Non ci sono strategie disponibili. "
+                    "Puoi comunque usare la scheda personalizzata."
                 )
             else:
+                selected_category = st.selectbox(
+                    "Gruppo strategie",
+                    available_categories,
+                    key="monthly_strategy_category",
+                )
+
+                category_names = []
+                seen_names = set()
+                for category, name in available_names:
+                    if (
+                        category == selected_category
+                        and name
+                        and name not in seen_names
+                    ):
+                        category_names.append(name)
+                        seen_names.add(name)
+
                 option_labels = [
-                    f"{category} — {human_strategy_name(name)}"
-                    for category, name in unique_options
+                    human_strategy_name(name)
+                    for name in category_names
                 ]
                 selected_option = st.selectbox(
                     "Strategia",
@@ -3286,9 +3322,12 @@ elif page == "📅 Analisi mensile":
                     key="monthly_strategy_select",
                 )
                 idx = option_labels.index(selected_option)
-                _, selected_name = unique_options[idx]
+                selected_name = category_names[idx]
 
-                st.info("Analizzo: " + human_strategy_name(selected_name))
+                st.info(
+                    f"{selected_category} — Analizzo: "
+                    + human_strategy_name(selected_name)
+                )
 
                 strategy_df = apply_generated_strategy_name(
                     closed,
