@@ -3326,6 +3326,16 @@ elif page == "📅 Analisi mensile":
             status_m=a.multiselect("STATUS",monthly_opts("status"),key="monthly_status")
             leagues_m=b.multiselect("Campionati",monthly_opts("league"),key="monthly_leagues")
 
+            value_negativo_m = st.checkbox(
+                "Solo Value negativo",
+                value=False,
+                key="monthly_value_negativo",
+            )
+            st.caption(
+                "Stessa regola del motore: quota attuale < quota reale; "
+                "se la quota reale manca, Valore ALLB < Media ALLB."
+            )
+
             odds_m=pd.to_numeric(closed["current_odds"],errors="coerce").dropna()
             probs_m=pd.to_numeric(closed["prob_1"],errors="coerce").dropna()
 
@@ -3375,6 +3385,12 @@ elif page == "📅 Analisi mensile":
                 min_prob_m,
                 max_prob_m,
             )
+
+            if value_negativo_m:
+                monthly_filtered = add_strategy_derived_columns(monthly_filtered)
+                monthly_filtered = monthly_filtered[
+                    monthly_filtered["_value_negative"].fillna(False).astype(bool)
+                ]
 
             if use_cc_m and not ccvals_m.empty:
                 cc_numeric_m=pd.to_numeric(monthly_filtered["c_aff_count"],errors="coerce")
