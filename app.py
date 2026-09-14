@@ -286,6 +286,51 @@ def get_matches():
     with sqlite_connection() as con:
         return pd.read_sql_query("SELECT * FROM matches ORDER BY date,time,id", con)
 
+
+def sort_matches_newest_first(df):
+    """
+    Ordina gli elenchi visibili con le partite più recenti in alto.
+
+    Va usata soltanto per tabelle e menu mostrati all'utente:
+    i calcoli temporali e i grafici cumulativi restano cronologici.
+    """
+    if df is None:
+        return pd.DataFrame()
+    if df.empty:
+        return df.copy()
+
+    out = df.copy()
+    out["_display_sort_date"] = pd.to_datetime(
+        out["date"], errors="coerce"
+    )
+    out["_display_sort_time"] = (
+        out["time"].fillna("").astype(str)
+    )
+    out["_display_sort_id"] = (
+        out["id"].fillna("").astype(str)
+    )
+
+    return (
+        out.sort_values(
+            [
+                "_display_sort_date",
+                "_display_sort_time",
+                "_display_sort_id",
+            ],
+            ascending=[False, False, False],
+            na_position="last",
+        )
+        .drop(
+            columns=[
+                "_display_sort_date",
+                "_display_sort_time",
+                "_display_sort_id",
+            ],
+            errors="ignore",
+        )
+    )
+
+
 def next_id():
     df = get_matches()
     if df.empty:
@@ -3497,8 +3542,9 @@ elif page == "🎯 Partite da giocare":
 
                 st.dataframe(
                     show.sort_values(
-                        ["Data","Ora"],
-                        ascending=[True, True],
+                        ["Data", "Ora"],
+                        ascending=[False, False],
+                        na_position="last",
                     ),
                     use_container_width=True,
                     hide_index=True,
@@ -3778,8 +3824,9 @@ elif page == "🎯 Partite da giocare":
 
             st.dataframe(
                 show.sort_values(
-                    ["Data","Ora"],
-                    ascending=[True, True],
+                    ["Data", "Ora"],
+                    ascending=[False, False],
+                    na_position="last",
                 ),
                 use_container_width=True,
                 hide_index=True,
@@ -3872,7 +3919,7 @@ elif page == "🏠 Home":
         show["Risultato"] = show["final_score"].fillna("")
         show["Quota"] = pd.to_numeric(show["current_odds"], errors="coerce").round(2)
         show["Profitto €"] = pd.to_numeric(show["profit"], errors="coerce")
-        show = show.sort_values(["date", "time", "id"], ascending=[False, False, False])
+        show = sort_matches_newest_first(show)
 
         display_columns = [
             "date", "time", "match_name", "Quota",
@@ -3942,6 +3989,8 @@ elif page == "📋 Database":
         show["Quota"] = pd.to_numeric(show["current_odds"], errors="coerce").round(2)
         show["Profitto €"] = pd.to_numeric(show["profit"], errors="coerce")
 
+        show = sort_matches_newest_first(show)
+
         preferred = [
             "id", "date", "time", "league", "match_name",
             "Quota", "Esito", "Risultato", "Profitto €"
@@ -3956,7 +4005,13 @@ elif page == "📋 Database":
 elif page == "🏆 Aggiorna risultato":
     st.subheader("🏆 Aggiorna risultato")
     df = get_matches()
-    open_df = df[~df["outcome"].isin(["V","P"])] if not df.empty else df
+    open_df = (
+        sort_matches_newest_first(
+            df[~df["outcome"].isin(["V", "P"])]
+        )
+        if not df.empty
+        else df
+    )
     if open_df.empty:
         st.info("Nessuna partita aperta.")
     else:
@@ -3977,7 +4032,7 @@ elif page == "🏆 Aggiorna risultato":
 
 elif page == "✏️ Modifica/Elimina":
     st.subheader("✏️ Modifica o elimina")
-    df = get_matches()
+    df = sort_matches_newest_first(get_matches())
 
     if df.empty:
         st.info("Nessuna partita.")
@@ -4196,7 +4251,11 @@ elif page == "🔎 Analisi filtri":
             "Win rate %":round(s["win_rate"],2),"Quota media":round(s["avg_odds"],2),
             "Profitto €":round(s["profit"],2),"ROI %":round(s["roi"],2)
         }]), hide_index=True, use_container_width=True)
-        st.dataframe(filtered, hide_index=True, use_container_width=True)
+        st.dataframe(
+            sort_matches_newest_first(filtered),
+            hide_index=True,
+            use_container_width=True,
+        )
 
 
 elif page == "🧪 Laboratorio Strategie":
@@ -4336,7 +4395,7 @@ elif page == "🧪 Laboratorio Strategie":
         if filtered.empty:
             st.warning("Nessuna partita rispetta tutti i filtri selezionati.")
         else:
-            detail = filtered.copy()
+            detail = sort_matches_newest_first(filtered)
             detail["Esito"] = detail["outcome"].map({"V": "🟢 V", "P": "🔴 P"})
             detail["Quota"] = pd.to_numeric(detail["current_odds"], errors="coerce").round(2)
             detail["Prob. 1"] = pd.to_numeric(detail["prob_1"], errors="coerce").round(1)
@@ -5040,7 +5099,11 @@ elif page == "🧠 Trova metodo migliore":
                 })
 
                 st.dataframe(
-                    shown,
+                    shown.sort_values(
+                        ["Data", "Ora"],
+                        ascending=[False, False],
+                        na_position="last",
+                    ),
                     use_container_width=True,
                     hide_index=True,
                 )
@@ -5114,7 +5177,8 @@ elif page == "🧠 Trova metodo migliore":
                 st.dataframe(
                     upcoming.sort_values(
                         ["Data", "Ora"],
-                        ascending=[True, True],
+                        ascending=[False, False],
+                        na_position="last",
                     ),
                     use_container_width=True,
                     hide_index=True,
