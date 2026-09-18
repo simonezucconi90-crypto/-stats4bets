@@ -2,6 +2,11 @@ name: Aggiorna risultati e profitti
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "update_results.py"
+      - ".github/workflows/results-update.yml"
   schedule:
     - cron: "15 5 * * *"
 
