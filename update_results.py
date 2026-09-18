@@ -160,23 +160,69 @@ def convert_sportapi_event(event, fallback_date=""):
     )
 
 
-def fetch_sportapi_by_date(date_iso, api_key):
+SPORTAPI_COUNTRY_ALIASES = {
+    "italy": {"italy", "italia"}, "england": {"england", "efl cup", "championship", "league one", "league two"},
+    "scotland": {"scotland", "scozia"}, "wales": {"wales", "galles"}, "ireland": {"ireland", "irlanda"},
+    "northern ireland": {"northern ireland", "irlanda del nord"}, "austria": {"austria"},
+    "switzerland": {"switzerland", "svizzera"}, "germany": {"germany", "germania"},
+    "france": {"france", "francia"}, "spain": {"spain", "spagna", "la liga"},
+    "portugal": {"portugal", "portogallo"}, "netherlands": {"netherlands", "olanda"},
+    "belgium": {"belgium", "belgio"}, "denmark": {"denmark", "danimarca"},
+    "sweden": {"sweden", "svezia"}, "norway": {"norway", "norvegia"},
+    "finland": {"finland", "finlandia"}, "iceland": {"iceland", "islanda"},
+    "poland": {"poland", "polonia"}, "czech republic": {"czech republic", "repubblica ceca", "czechia"},
+    "croatia": {"croatia", "croazia"}, "serbia": {"serbia"}, "bulgaria": {"bulgaria"},
+    "romania": {"romania"}, "ukraine": {"ukraine", "ucraina"}, "estonia": {"estonia"},
+    "georgia": {"georgia"}, "turkey": {"turkey", "turchia"}, "saudi arabia": {"saudi arabia", "arabia saudita"},
+    "south africa": {"south africa", "sudafrica"}, "japan": {"japan", "giappone"},
+    "canada": {"canada"}, "usa": {"usa", "united states", "america"}, "mexico": {"mexico", "messico"},
+    "brazil": {"brazil", "brasile"}, "argentina": {"argentina"}, "peru": {"peru"},
+    "bolivia": {"bolivia"}, "chile": {"chile"}, "colombia": {"colombia"},
+    "ecuador": {"ecuador"}, "paraguay": {"paraguay"}, "venezuela": {"venezuela"},
+}
+
+def sportapi_category_info(item):
+    category = item.get("category") if isinstance(item, dict) else {}
+    category = category if isinstance(category, dict) else {}
+    if not category and isinstance(item, dict):
+        category = item
+    return str(category.get("id") or ""), str(category.get("name") or "")
+
+def sportapi_category_match(league, category_name):
+    league_norm = normalize_league_name(league)
+    category_norm = normalize_league_name(category_name)
+    if not category_norm:
+        return False
+    if category_norm == league_norm or category_norm in league_norm or league_norm in category_norm:
+        return True
+    return any(
+        any(alias in league_norm for alias in aliases) and any(alias in category_norm for alias in aliases)
+        for aliases in SPORTAPI_COUNTRY_ALIASES.values()
+    )
+
+def fetch_sportapi_categories_by_date(date_iso, api_key):
     response = requests.get(
-        f"{SPORTAPI_BASE}/sport/football/scheduled-events/{date_iso}",
+        f"{SPORTAPI_BASE}/sport/football/{date_iso}/0/categories",
         headers=sportapi_headers(api_key),
         timeout=30,
     )
-    if response.status_code in {401, 403, 429}:
-        raise RuntimeError(f"SportAPI non disponibile ({response.status_code}) su {date_iso}")
+    response.raise_for_status()
+    payload = response.json()
+    categories = payload.get("categories") or payload.get("data") or []
+    return [sportapi_category_info(item) for item in categories if sportapi_category_info(item)[0]]
+
+def fetch_sportapi_category_events(date_iso, category_id, api_key):
+    response = requests.get(
+        f"{SPORTAPI_BASE}/category/{category_id}/scheduled-events/{date_iso}",
+        headers=sportapi_headers(api_key),
+        timeout=30,
+    )
     response.raise_for_status()
     payload = response.json()
     events = payload.get("events") or payload.get("data") or []
     if isinstance(events, dict):
         events = events.get("events") or []
-    if not isinstance(events, list):
-        return []
-    return [convert_sportapi_event(event, date_iso) for event in events]
-
+    return [convert_sportapi_event(event, date_iso) for event in events] if isinstance(events, list) else []
 
 def football_data_headers(api_key):
     return {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
@@ -435,9 +481,18 @@ def main():
 
     for date_iso in dates:
         try:
-            fixtures = fetch_sportapi_by_date(date_iso, rapidapi_key)
+            categories = fetch_sportapi_categories_by_date(date_iso, rapidapi_key)
+            needed = [m for m in matches if str(m.get("date") or "")[:10] == date_iso]
+            selected = [cid for cid, name in categories if any(sportapi_category_match(m.get("league") or "", name) for m in needed)]
+            category_ids = list(dict.fromkeys(selected or [cid for cid, _ in categories]))[:70]
+            fixtures = []
+            for category_id in category_ids:
+                try:
+                    fixtures.extend(fetch_sportapi_category_events(date_iso, category_id, rapidapi_key))
+                except Exception as category_exc:
+                    print(f"  SPORTAPI categoria {category_id} saltata: {category_exc}")
             sportapi_cache[date_iso] = fixtures
-            print(f"SPORTAPI {date_iso}: {len(fixtures)} partite disponibili.")
+            print(f"SPORTAPI {date_iso}: {len(fixtures)} partite disponibili ({len(category_ids)} categorie consultate).")
         except Exception as exc:
             sportapi_cache[date_iso] = []
             print(f"ERRORE SPORTAPI su {date_iso}: {exc}")
