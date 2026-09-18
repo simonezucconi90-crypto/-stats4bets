@@ -37,6 +37,9 @@ TEAM_ALIASES = {
     "u catolica": "universidad catolica",
     "universidad catolica": "universidad catolica",
     "universidad catolica chile": "universidad catolica",
+    "hanacka": "hanacka slavia kromeriz",
+    "hanacka slavia": "hanacka slavia kromeriz",
+    "hanacka slavia kromeriz": "hanacka slavia kromeriz",
 }
 
 def basic_normalize(value):
@@ -170,7 +173,7 @@ SPORTAPI_COUNTRY_ALIASES = {
     "belgium": {"belgium", "belgio"}, "denmark": {"denmark", "danimarca"},
     "sweden": {"sweden", "svezia"}, "norway": {"norway", "norvegia"},
     "finland": {"finland", "finlandia"}, "iceland": {"iceland", "islanda"},
-    "poland": {"poland", "polonia"}, "czech republic": {"czech republic", "repubblica ceca", "czechia"},
+    "poland": {"poland", "polonia"}, "czech republic": {"czech republic", "repubblica ceca", "czechia", "ceca"},
     "croatia": {"croatia", "croazia"}, "serbia": {"serbia"}, "bulgaria": {"bulgaria"},
     "romania": {"romania"}, "ukraine": {"ukraine", "ucraina"}, "estonia": {"estonia"},
     "georgia": {"georgia"}, "turkey": {"turkey", "turchia"}, "saudi arabia": {"saudi arabia", "arabia saudita"},
