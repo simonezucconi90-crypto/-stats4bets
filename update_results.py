@@ -11,6 +11,8 @@ from supabase import create_client
 FOOTBALLDATA_BASE = "https://footballdata.io/api/v1"
 THESPORTSDB_SEARCH = "https://www.thesportsdb.com/api/v1/json/123/searchevents.php"
 THESPORTSDB_LOOKUP = "https://www.thesportsdb.com/api/v1/json/123/lookupevent.php"
+SPORTAPI_BASE = "https://sportapi7.p.rapidapi.com/api/v1"
+SPORTAPI_HOST = "sportapi7.p.rapidapi.com"
 
 STAKE = 20.0
 LOOKBACK_DAYS = 14
@@ -104,6 +106,77 @@ def build_fixture(source, event_id, home, away, league, home_goals, away_goals, 
         "status": str(status or ""),
         "date": str(date_iso or ""),
     }
+
+def sportapi_headers(api_key):
+    return {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": SPORTAPI_HOST,
+        "Accept": "application/json",
+    }
+
+
+def score_value(score):
+    if isinstance(score, dict):
+        for key in ("current", "display", "normaltime"):
+            value = to_int(score.get(key))
+            if value is not None:
+                return value
+    return to_int(score)
+
+
+def sportapi_league_name(event):
+    tournament = event.get("tournament") or {}
+    unique = tournament.get("uniqueTournament") or {}
+    category = tournament.get("category") or {}
+    return (
+        unique.get("name")
+        or tournament.get("name")
+        or category.get("name")
+        or ""
+    )
+
+
+def convert_sportapi_event(event, fallback_date=""):
+    home = event.get("homeTeam") or {}
+    away = event.get("awayTeam") or {}
+    status = event.get("status") or {}
+    timestamp = event.get("startTimestamp")
+    date_iso = fallback_date
+    if timestamp:
+        try:
+            date_iso = datetime.fromtimestamp(int(timestamp)).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    return build_fixture(
+        "SportAPI",
+        event.get("id"),
+        home.get("name") or home.get("shortName"),
+        away.get("name") or away.get("shortName"),
+        sportapi_league_name(event),
+        score_value(event.get("homeScore")),
+        score_value(event.get("awayScore")),
+        status.get("type") or status.get("description") or status.get("code"),
+        date_iso,
+    )
+
+
+def fetch_sportapi_by_date(date_iso, api_key):
+    response = requests.get(
+        f"{SPORTAPI_BASE}/category/1/scheduled-events/{date_iso}",
+        headers=sportapi_headers(api_key),
+        timeout=30,
+    )
+    if response.status_code in {401, 403, 429}:
+        raise RuntimeError(f"SportAPI non disponibile ({response.status_code}) su {date_iso}")
+    response.raise_for_status()
+    payload = response.json()
+    events = payload.get("events") or payload.get("data") or []
+    if isinstance(events, dict):
+        events = events.get("events") or []
+    if not isinstance(events, list):
+        return []
+    return [convert_sportapi_event(event, date_iso) for event in events]
+
 
 def football_data_headers(api_key):
     return {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
@@ -279,6 +352,8 @@ def is_finished(date_iso, fixture):
     }
     if status in finished_statuses:
         return True
+    if fixture.get("source") == "SportAPI":
+        return False
     try:
         event_date = datetime.strptime(date_iso, "%Y-%m-%d").date()
     except Exception:
@@ -304,7 +379,9 @@ def calculate_money(outcome, current_odds):
 
 def verify_fixture(db_match, fixture, football_data_key):
     try:
-        if fixture.get("source") == "Footballdata.io":
+        if fixture.get("source") == "SportAPI":
+            verified = fixture
+        elif fixture.get("source") == "Footballdata.io":
             verified = lookup_football_data_match(fixture.get("event_id"), football_data_key)
         else:
             verified = lookup_thesportsdb_event(fixture.get("event_id"))
@@ -325,9 +402,12 @@ def verify_fixture(db_match, fixture, football_data_key):
 def main():
     client = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 
+    rapidapi_key = os.getenv("RAPIDAPI_KEY", "").strip()
+    if not rapidapi_key:
+        raise RuntimeError("RAPIDAPI_KEY non disponibile nel workflow GitHub.")
+
+    # Le vecchie fonti restano soltanto come fallback opzionale.
     football_data_key = os.getenv("FOOTBALLDATA_IO_KEY", "").strip()
-    if not football_data_key:
-        raise RuntimeError("FOOTBALLDATA_IO_KEY non disponibile nel workflow GitHub.")
 
     open_matches = (
         client.table("matches")
@@ -349,40 +429,66 @@ def main():
 
     print(f"Partite aperte: {len(open_matches)} | Da cercare: {len(matches)}")
 
-    football_data_cache = {}
     dates = sorted({str(m.get("date") or "")[:10] for m in matches})
+    sportapi_cache = {}
+    football_data_cache = {}
 
     for date_iso in dates:
         try:
-            fixtures = fetch_football_data_by_date(date_iso, football_data_key)
-            football_data_cache[date_iso] = fixtures
-            print(f"FOOTBALLDATA.IO {date_iso}: {len(fixtures)} partite disponibili.")
+            fixtures = fetch_sportapi_by_date(date_iso, rapidapi_key)
+            sportapi_cache[date_iso] = fixtures
+            print(f"SPORTAPI {date_iso}: {len(fixtures)} partite disponibili.")
         except Exception as exc:
+            sportapi_cache[date_iso] = []
+            print(f"ERRORE SPORTAPI su {date_iso}: {exc}")
+
+        if football_data_key:
+            try:
+                fixtures = fetch_football_data_by_date(date_iso, football_data_key)
+                football_data_cache[date_iso] = fixtures
+                print(f"FOOTBALLDATA.IO {date_iso}: {len(fixtures)} partite disponibili.")
+            except Exception as exc:
+                football_data_cache[date_iso] = []
+                print(f"ERRORE FOOTBALLDATA.IO su {date_iso}: {exc}")
+        else:
             football_data_cache[date_iso] = []
-            print(f"ERRORE FOOTBALLDATA.IO su {date_iso}: {exc}")
 
     updated = waiting = uncertain = 0
-    used_fd = used_tsdb = 0
+    used_sportapi = used_fd = used_tsdb = 0
 
     for i, match in enumerate(matches, 1):
         date_iso = str(match.get("date") or "")[:10]
         print(f'[{i}/{len(matches)}] {match.get("match_name")} ({date_iso})')
 
         fixture, safe, confidence, reason, details = choose_fixture(
-            match, football_data_cache.get(date_iso, [])
+            match, sportapi_cache.get(date_iso, [])
         )
 
         if fixture and safe:
-            fixture["source"] = "Footballdata.io"
+            fixture["source"] = "SportAPI"
             print(
-                f'  FOOTBALLDATA candidata: {details.get("api_home")} - '
+                f'  SPORTAPI candidata: {details.get("api_home")} - '
                 f'{details.get("api_away")} | confidenza={confidence:.3f}'
             )
         else:
             fixture = None
 
+        if fixture is None and football_data_key:
+            print("  ↪ SportAPI non basta. Provo Footballdata.io.")
+            fixture, safe, confidence, reason, details = choose_fixture(
+                match, football_data_cache.get(date_iso, [])
+            )
+            if fixture and safe:
+                fixture["source"] = "Footballdata.io"
+                print(
+                    f'  FOOTBALLDATA candidata: {details.get("api_home")} - '
+                    f'{details.get("api_away")} | confidenza={confidence:.3f}'
+                )
+            else:
+                fixture = None
+
         if fixture is None:
-            print("  ↪ Footballdata.io non basta. Provo TheSportsDB.")
+            print("  ↪ Fonti principali non bastano. Provo TheSportsDB.")
             try:
                 fallback = fetch_thesportsdb_match(match)
             except Exception as exc:
@@ -390,7 +496,6 @@ def main():
                 print(f"  ERRORE TheSportsDB: {exc}")
 
             fixture, safe, confidence, reason, details = choose_fixture(match, fallback)
-
             if fixture and safe:
                 fixture["source"] = "TheSportsDB"
                 print(
@@ -412,7 +517,6 @@ def main():
             continue
 
         source = verified.get("source")
-
         if not is_finished(date_iso, verified):
             waiting += 1
             print(f"  ⏳ {source}: partita non conclusa o risultato definitivo non disponibile.")
@@ -420,7 +524,6 @@ def main():
 
         hg = verified.get("goals", {}).get("home")
         ag = verified.get("goals", {}).get("away")
-
         print(
             f'  ✓ VERIFICA FINALE {source} id={verified.get("event_id")}: '
             f'{verified["teams"]["home"]["name"]} - {verified["teams"]["away"]["name"]} = {hg}-{ag}'
@@ -439,10 +542,13 @@ def main():
             "profit": profit,
         }
 
+        # Aggiorna esclusivamente i quattro campi del risultato.
         client.table("matches").update(values).eq("id", match["id"]).execute()
 
         updated += 1
-        if source == "Footballdata.io":
+        if source == "SportAPI":
+            used_sportapi += 1
+        elif source == "Footballdata.io":
             used_fd += 1
         else:
             used_tsdb += 1
@@ -457,8 +563,10 @@ def main():
         f"{uncertain} non trovate/abbinate con sicurezza."
     )
     print(
-        f"Fonti usate: Footballdata.io={used_fd} | TheSportsDB={used_tsdb}"
+        f"Fonti usate: SportAPI={used_sportapi} | "
+        f"Footballdata.io={used_fd} | TheSportsDB={used_tsdb}"
     )
+
 
 if __name__ == "__main__":
     main()
