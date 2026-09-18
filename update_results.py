@@ -162,7 +162,7 @@ def convert_sportapi_event(event, fallback_date=""):
 
 def fetch_sportapi_by_date(date_iso, api_key):
     response = requests.get(
-        f"{SPORTAPI_BASE}/category/1/scheduled-events/{date_iso}",
+        f"{SPORTAPI_BASE}/sport/football/scheduled-events/{date_iso}",
         headers=sportapi_headers(api_key),
         timeout=30,
     )
