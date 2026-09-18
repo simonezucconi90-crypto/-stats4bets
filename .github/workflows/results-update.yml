@@ -2,6 +2,12 @@ name: Aggiorna risultati e profitti
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "15 5 * * *"
+
+concurrency:
+  group: stats4bets-results-update
+  cancel-in-progress: false
 
 jobs:
   update-results:
@@ -23,6 +29,7 @@ jobs:
 
       - name: Aggiorna risultati
         env:
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           FOOTBALLDATA_IO_KEY: ${{ secrets.FOOTBALLDATA_IO_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
