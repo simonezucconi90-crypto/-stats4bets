@@ -16,7 +16,8 @@ SPORTAPI_HOST = "sportapi7.p.rapidapi.com"
 
 STAKE = 20.0
 LOOKBACK_DAYS = 14
-REQUEST_DELAY = 2.1
+REQUEST_DELAY = 4.5
+THESPORTSDB_RETRIES = 4
 HIGH_CONFIDENCE = 0.72
 REVIEW_CONFIDENCE = 0.65
 
@@ -305,6 +306,32 @@ def convert_thesportsdb_event(event):
         event.get("dateEvent"),
     )
 
+def thesportsdb_get_json(url, params):
+    """Chiama TheSportsDB rispettando i limiti e riprovando dopo un 429."""
+    for attempt in range(THESPORTSDB_RETRIES):
+        response = requests.get(url, params=params, timeout=30)
+        if response.status_code != 429:
+            response.raise_for_status()
+            payload = response.json()
+            time.sleep(REQUEST_DELAY)
+            return payload
+
+        retry_after = str(response.headers.get("Retry-After") or "").strip()
+        try:
+            server_wait = float(retry_after)
+        except Exception:
+            server_wait = 0.0
+        wait_seconds = max(server_wait, min(45.0, 12.0 * (2 ** attempt)))
+        print(
+            f"  ⏳ TheSportsDB limita le richieste (429): "
+            f"attendo {wait_seconds:.0f}s e riprovo "
+            f"({attempt + 1}/{THESPORTSDB_RETRIES})."
+        )
+        time.sleep(wait_seconds)
+
+    response.raise_for_status()
+
+
 def fetch_thesportsdb_match(match):
     home, away = split_match_name(match.get("match_name"))
     date_iso = str(match.get("date") or "")[:10]
@@ -315,13 +342,11 @@ def fetch_thesportsdb_match(match):
     if nh and na and (nh.casefold(), na.casefold()) != (home.casefold(), away.casefold()):
         queries.append((nh, na))
     for q_home, q_away in queries:
-        response = requests.get(
+        payload = thesportsdb_get_json(
             THESPORTSDB_SEARCH,
-            params={"e": f"{q_home}_vs_{q_away}", "d": date_iso},
-            timeout=30,
+            {"e": f"{q_home}_vs_{q_away}", "d": date_iso},
         )
-        response.raise_for_status()
-        events = response.json().get("event") or []
+        events = payload.get("event") or []
         soccer = [
             convert_thesportsdb_event(e)
             for e in events
@@ -329,22 +354,7 @@ def fetch_thesportsdb_match(match):
         ]
         if soccer:
             return soccer
-        time.sleep(REQUEST_DELAY)
     return []
-
-def lookup_thesportsdb_event(event_id):
-    if not event_id:
-        return None
-    time.sleep(REQUEST_DELAY)
-    response = requests.get(THESPORTSDB_LOOKUP, params={"id": event_id}, timeout=30)
-    response.raise_for_status()
-    events = response.json().get("events") or []
-    if not events:
-        return None
-    event = events[0]
-    if str(event.get("strSport") or "").casefold() != "soccer":
-        return None
-    return convert_thesportsdb_event(event)
 
 def candidate_score(db_match, fixture):
     db_home, db_away = split_match_name(db_match.get("match_name"))
@@ -433,7 +443,10 @@ def verify_fixture(db_match, fixture, football_data_key):
         elif fixture.get("source") == "Footballdata.io":
             verified = lookup_football_data_match(fixture.get("event_id"), football_data_key)
         else:
-            verified = lookup_thesportsdb_event(fixture.get("event_id"))
+            # La ricerca TheSportsDB restituisce già squadre, stato e risultato.
+            # Riutilizzarla evita una seconda chiamata per ogni partita e dimezza
+            # il rischio di blocco 429.
+            verified = fixture
     except Exception as exc:
         print(f"  ⏳ verifica finale fallita: {exc}")
         return None
