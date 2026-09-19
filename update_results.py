@@ -307,9 +307,25 @@ def convert_thesportsdb_event(event):
     )
 
 def thesportsdb_get_json(url, params):
-    """Chiama TheSportsDB rispettando i limiti e riprovando dopo un 429."""
+    """Chiama TheSportsDB rispettando limiti e interruzioni temporanee."""
+    last_error = None
+    response = None
     for attempt in range(THESPORTSDB_RETRIES):
-        response = requests.get(url, params=params, timeout=30)
+        try:
+            response = requests.get(url, params=params, timeout=30)
+        except requests.RequestException as exc:
+            last_error = exc
+            if attempt == THESPORTSDB_RETRIES - 1:
+                raise
+            wait_seconds = min(30.0, 5.0 * (2 ** attempt))
+            print(
+                f"  ⏳ Connessione TheSportsDB interrotta: "
+                f"attendo {wait_seconds:.0f}s e riprovo "
+                f"({attempt + 1}/{THESPORTSDB_RETRIES})."
+            )
+            time.sleep(wait_seconds)
+            continue
+
         if response.status_code != 429:
             response.raise_for_status()
             payload = response.json()
@@ -329,7 +345,11 @@ def thesportsdb_get_json(url, params):
         )
         time.sleep(wait_seconds)
 
-    response.raise_for_status()
+    if response is not None:
+        response.raise_for_status()
+    if last_error:
+        raise last_error
+    raise RuntimeError("TheSportsDB non ha restituito una risposta.")
 
 
 def fetch_thesportsdb_match(match):
