@@ -3928,19 +3928,11 @@ elif page == "🏠 Home":
             use_container_width=True,
         ):
             try:
-                with st.spinner("Cerco risultati e calcolo profitti..."):
-                    result = run_and_wait_named_workflow("results-update.yml")
-
-                if result["ok"]:
-                    st.success("✅ Risultati e profitti aggiornati.")
-                    time.sleep(1)
-                    st.rerun()
-                elif result["conclusion"] == "timeout":
-                    st.warning("Workflow ancora in corso. Ricarica tra un minuto.")
-                else:
-                    st.error(f'Errore workflow: {result["conclusion"]}')
-                    if result.get("url"):
-                        st.link_button("Apri dettaglio GitHub", result["url"])
+                trigger_named_workflow("results-update.yml")
+                st.success(
+                    "✅ Aggiornamento avviato. Puoi chiudere l’app: "
+                    "il controllo continua sui server. Rientra e premi ↻ Ricarica."
+                )
             except Exception as exc:
                 st.error(f"Errore aggiornamento risultati: {exc}")
 
