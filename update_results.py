@@ -41,6 +41,11 @@ TEAM_ALIASES = {
     "hanacka": "hanacka slavia kromeriz",
     "hanacka slavia": "hanacka slavia kromeriz",
     "hanacka slavia kromeriz": "hanacka slavia kromeriz",
+    "rhode island": "rhode island fc",
+    "rhode island fc": "rhode island fc",
+    "miami fc ii": "miami fc",
+    "miami ii": "miami fc",
+    "miami fc": "miami fc",
 }
 
 def basic_normalize(value):
@@ -355,7 +360,10 @@ def thesportsdb_get_json(url, params):
 def fetch_thesportsdb_match(match):
     home, away = split_match_name(match.get("match_name"))
     date_iso = str(match.get("date") or "")[:10]
-    if not home or not away:
+    incomplete_name = not away and bool((match.get("match_name") or "").strip())
+    if not home and incomplete_name:
+        home = str(match.get("match_name") or "").strip()
+    if not home:
         return []
 
     # Le partite americane giocate nella notte italiana possono essere
@@ -374,14 +382,19 @@ def fetch_thesportsdb_match(match):
 
     queries = [(home, away)]
     nh, na = normalize_team_name(home), normalize_team_name(away)
-    if nh and na and (nh.casefold(), na.casefold()) != (home.casefold(), away.casefold()):
+    if incomplete_name:
+        queries = [(home, "")]
+        if nh and nh.casefold() != home.casefold():
+            queries.append((nh, ""))
+    elif nh and na and (nh.casefold(), na.casefold()) != (home.casefold(), away.casefold()):
         queries.append((nh, na))
 
     for search_date in search_dates:
         for q_home, q_away in queries:
+            event_query = f"{q_home}_vs_{q_away}" if q_away else q_home
             payload = thesportsdb_get_json(
                 THESPORTSDB_SEARCH,
-                {"e": f"{q_home}_vs_{q_away}", "d": search_date},
+                {"e": event_query, "d": search_date},
             )
             events = payload.get("event") or []
             soccer = [
@@ -400,6 +413,11 @@ def fetch_thesportsdb_match(match):
 
 def candidate_score(db_match, fixture):
     db_home, db_away = split_match_name(db_match.get("match_name"))
+    if not db_home and not db_away:
+        # Riga storica malformata: il nome rimasto rappresenta la squadra di casa
+        # (la giocata è 1). Il controllo speciale in choose_fixture richiede poi
+        # una corrispondenza univoca e molto forte.
+        db_home = str(db_match.get("match_name") or "").strip()
     api_home = fixture.get("teams", {}).get("home", {}).get("name", "")
     api_away = fixture.get("teams", {}).get("away", {}).get("name", "")
     db_league = db_match.get("league") or ""
@@ -407,12 +425,18 @@ def candidate_score(db_match, fixture):
     home_score = similarity(db_home, api_home, team=True)
     away_score = similarity(db_away, api_away, team=True)
     league_score = league_similarity(db_league, api_league)
-    total = min(1.0, (home_score + away_score) / 2 + 0.04 * league_score)
+    incomplete_name = not bool(db_away)
+    total = (
+        min(1.0, home_score + 0.04 * league_score)
+        if incomplete_name
+        else min(1.0, (home_score + away_score) / 2 + 0.04 * league_score)
+    )
     return total, {
         "db_home": db_home, "db_away": db_away,
         "api_home": api_home, "api_away": api_away,
         "home_score": home_score, "away_score": away_score,
         "league_score": league_score,
+        "incomplete_name": incomplete_name,
     }
 
 def choose_fixture(db_match, fixtures):
@@ -428,6 +452,13 @@ def choose_fixture(db_match, fixtures):
     margin = total - second
     hs, aas, ls = details["home_score"], details["away_score"], details["league_score"]
     margin_ok = margin >= 0.05 or len(candidates) == 1
+    if details.get("incomplete_name"):
+        # Una riga senza avversaria è recuperabile soltanto se la squadra
+        # coincide fortemente con la squadra di casa e il candidato è univoco.
+        partial_margin_ok = margin >= 0.08 or len(candidates) == 1
+        if total >= 0.86 and hs >= 0.82 and partial_margin_ok:
+            return fixture, True, total, "recupero nome incompleto", details
+        return fixture, False, total, "nome incompleto non sicuro", details
     if total >= HIGH_CONFIDENCE and hs >= 0.68 and aas >= 0.58 and margin_ok:
         return fixture, True, total, "alta confidenza", details
     alias_home = normalize_team_name(details["db_home"]) == normalize_team_name(details["api_home"])
@@ -495,6 +526,14 @@ def verify_fixture(db_match, fixture, football_data_key):
     if not verified:
         return None
     total, details = candidate_score(db_match, verified)
+    if details.get("incomplete_name"):
+        if total < 0.86 or details["home_score"] < 0.82:
+            print(
+                f'  ✗ VERIFICA FINALE SCARTATA (nome incompleto): '
+                f'confidenza={total:.3f} | Casa={details["home_score"]:.3f}'
+            )
+            return None
+        return verified
     if total < HIGH_CONFIDENCE or details["home_score"] < 0.68 or details["away_score"] < 0.58:
         print(
             f'  ✗ VERIFICA FINALE SCARTATA: confidenza={total:.3f} | '
@@ -655,7 +694,14 @@ def main():
             "profit": profit,
         }
 
-        # Aggiorna esclusivamente i quattro campi del risultato.
+        # Normalmente aggiorna solo i quattro campi del risultato. Se una vecchia
+        # riga era stata salvata senza avversaria, ripara anche il nome dopo la
+        # verifica univoca della squadra di casa.
+        if not split_match_name(match.get("match_name"))[1]:
+            values["match_name"] = (
+                f'{verified["teams"]["home"]["name"]} - '
+                f'{verified["teams"]["away"]["name"]}'
+            )
         client.table("matches").update(values).eq("id", match["id"]).execute()
 
         updated += 1
