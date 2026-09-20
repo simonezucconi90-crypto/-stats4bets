@@ -357,23 +357,45 @@ def fetch_thesportsdb_match(match):
     date_iso = str(match.get("date") or "")[:10]
     if not home or not away:
         return []
+
+    # Le partite americane giocate nella notte italiana possono essere
+    # archiviate dalla fonte con la data locale del giorno precedente.
+    search_dates = [date_iso]
+    try:
+        hour = int(str(match.get("time") or "99:00").split(":", 1)[0])
+        if hour < 8:
+            previous_date = (
+                datetime.strptime(date_iso, "%Y-%m-%d").date()
+                - timedelta(days=1)
+            ).isoformat()
+            search_dates.append(previous_date)
+    except Exception:
+        pass
+
     queries = [(home, away)]
     nh, na = normalize_team_name(home), normalize_team_name(away)
     if nh and na and (nh.casefold(), na.casefold()) != (home.casefold(), away.casefold()):
         queries.append((nh, na))
-    for q_home, q_away in queries:
-        payload = thesportsdb_get_json(
-            THESPORTSDB_SEARCH,
-            {"e": f"{q_home}_vs_{q_away}", "d": date_iso},
-        )
-        events = payload.get("event") or []
-        soccer = [
-            convert_thesportsdb_event(e)
-            for e in events
-            if str(e.get("strSport") or "").casefold() == "soccer"
-        ]
-        if soccer:
-            return soccer
+
+    for search_date in search_dates:
+        for q_home, q_away in queries:
+            payload = thesportsdb_get_json(
+                THESPORTSDB_SEARCH,
+                {"e": f"{q_home}_vs_{q_away}", "d": search_date},
+            )
+            events = payload.get("event") or []
+            soccer = [
+                convert_thesportsdb_event(e)
+                for e in events
+                if str(e.get("strSport") or "").casefold() == "soccer"
+            ]
+            if soccer:
+                if search_date != date_iso:
+                    print(
+                        f"  ↪ trovata con data locale {search_date} "
+                        f"(data italiana {date_iso})."
+                    )
+                return soccer
     return []
 
 def candidate_score(db_match, fixture):
