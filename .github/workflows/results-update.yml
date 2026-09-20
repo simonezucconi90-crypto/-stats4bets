@@ -8,7 +8,8 @@ on:
       - "update_results.py"
       - ".github/workflows/results-update.yml"
   schedule:
-    - cron: "15 5 * * *"
+    # Controlli distribuiti: mattino, pomeriggio, sera e dopo mezzanotte (ora italiana variabile con ora legale).
+    - cron: "15 5,12,18,22 * * *"
 
 concurrency:
   group: stats4bets-results-update
