@@ -5152,22 +5152,64 @@ elif page == "🧠 Trova metodo migliore":
                     "Per decidere cosa seguire usa la Classifica Elite sopra."
                 )
 
-            st.markdown("### 🔎 Apri una strategia")
-            strategy_map = {
-                f'{row["Strategia"]} | '
-                f'ROI {row["ROI %"]:.2f}% | '
-                f'€ {row["Profitto €"]:.2f} | '
-                f'{int(row["Partite"])} partite': {
-                    "id": row["ID"],
-                    "name": str(row["Strategia"]),
+            st.markdown("### 🔎 Apri una strategia Élite con il grafico")
+            st.caption(
+                "Questo elenco prende le strategie esclusivamente dalla "
+                "Classifica Élite mostrata sopra, nello stesso ordine."
+            )
+
+            detail_ranking = (
+                elite_table.copy()
+                if elite_table is not None and not elite_table.empty
+                else pd.DataFrame()
+            )
+
+            if detail_ranking.empty:
+                st.info(
+                    "Al momento non ci sono strategie Élite disponibili da aprire."
+                )
+                st.stop()
+
+            elite_list_columns = [
+                column
+                for column in [
+                    "Strategia", "Partite", "ROI %",
+                    "Profitto €", "Stabilità %"
+                ]
+                if column in detail_ranking.columns
+            ]
+            st.dataframe(
+                detail_ranking[elite_list_columns],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            ranking_ids = (
+                ranking.set_index("Strategia")["ID"].to_dict()
+                if "ID" in ranking.columns
+                else {}
+            )
+            strategy_map = {}
+            for elite_position, (_, row) in enumerate(
+                detail_ranking.iterrows(),
+                start=1,
+            ):
+                strategy_name_value = str(row["Strategia"])
+                label = (
+                    f'🏆 Élite #{elite_position} — {strategy_name_value} | '
+                    f'ROI {float(row["ROI %"]):.2f}% | '
+                    f'€ {float(row["Profitto €"]):.2f} | '
+                    f'{int(row["Partite"])} partite'
+                )
+                strategy_map[label] = {
+                    "id": ranking_ids.get(strategy_name_value, ""),
+                    "name": strategy_name_value,
                 }
-                for _, row in ranking.iterrows()
-            }
 
             selected_label = st.selectbox(
-                "Strategia",
+                "Strategia Élite",
                 list(strategy_map.keys()),
-                key="strategy_detail_v2",
+                key="strategy_detail_elite_v3",
             )
             selected_strategy = strategy_map[selected_label]
             strategy_id = selected_strategy["id"]
