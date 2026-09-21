@@ -161,6 +161,85 @@ def latest_named_workflow_run(workflow_file):
     return runs[0] if runs else None
 
 
+def workflow_run_is_recent(run, max_hours=12):
+    created_at = str((run or {}).get("created_at") or "").strip()
+    if not created_at:
+        return False
+    try:
+        created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        return (datetime.now(timezone.utc) - created).total_seconds() <= max_hours * 3600
+    except Exception:
+        return False
+
+
+def workflow_status_message(run):
+    status = str((run or {}).get("status") or "").strip().casefold()
+    conclusion = str((run or {}).get("conclusion") or "").strip().casefold()
+    if status != "completed":
+        return "running"
+    if conclusion == "success":
+        return "success"
+    return conclusion or "error"
+
+
+@st.fragment(run_every=5)
+def poll_results_workflow_status(previous_run_id=None):
+    """Aggiorna soltanto il messaggio mentre GitHub lavora."""
+    try:
+        run = latest_named_workflow_run("results-update.yml")
+    except Exception as exc:
+        st.warning(f"Non riesco a leggere lo stato della sessione: {exc}")
+        return
+
+    if not run or (previous_run_id and run.get("id") == previous_run_id):
+        st.info(
+            "⏳ Avvio della sessione in corso… Puoi uscire dall’app e tornare più tardi."
+        )
+        return
+
+    state = workflow_status_message(run)
+    if state == "running":
+        st.info(
+            "⏳ Aggiornamento risultati in corso… Puoi uscire dall’app: "
+            "il lavoro continua sui server."
+        )
+        return
+
+    st.session_state.pop("results_workflow_previous_id", None)
+    st.session_state.pop("results_workflow_started_at", None)
+    st.rerun()
+
+
+def show_results_workflow_status():
+    """Mostra anche dopo la riapertura dell'app se la sessione è finita."""
+    try:
+        run = latest_named_workflow_run("results-update.yml")
+    except Exception as exc:
+        st.warning(f"Non riesco a leggere lo stato della sessione: {exc}")
+        return
+
+    previous_run_id = st.session_state.get("results_workflow_previous_id")
+    waiting_for_new_run = (
+        previous_run_id is not None
+        and (not run or run.get("id") == previous_run_id)
+    )
+    state = workflow_status_message(run)
+
+    if waiting_for_new_run or state == "running":
+        poll_results_workflow_status(previous_run_id)
+    elif run and workflow_run_is_recent(run):
+        if state == "success":
+            st.success(
+                "✅ SESSIONE CONCLUSA — aggiornamento risultati terminato. "
+                "I dati visualizzati qui sotto sono aggiornati."
+            )
+        else:
+            st.error(
+                f"❌ Sessione conclusa con errore ({state}). "
+                "Riprova con Aggiorna risultati e profitti."
+            )
+
+
 def run_and_wait_named_workflow(workflow_file, timeout_seconds=150):
     previous = latest_named_workflow_run(workflow_file)
     previous_id = previous.get("id") if previous else None
@@ -3928,17 +4007,21 @@ elif page == "🏠 Home":
             use_container_width=True,
         ):
             try:
+                previous_run = latest_named_workflow_run("results-update.yml")
                 trigger_named_workflow("results-update.yml")
-                st.success(
-                    "✅ Aggiornamento avviato. Puoi chiudere l’app: "
-                    "il controllo continua sui server. Rientra e premi ↻ Ricarica."
+                st.session_state["results_workflow_previous_id"] = (
+                    previous_run.get("id") if previous_run else None
                 )
+                st.session_state["results_workflow_started_at"] = time.time()
+                st.rerun()
             except Exception as exc:
                 st.error(f"Errore aggiornamento risultati: {exc}")
 
     with refresh_col:
         if st.button("↻ Ricarica", use_container_width=True):
             st.rerun()
+
+    show_results_workflow_status()
 
     st.caption(
         "La quota current_odds viene congelata al primo inserimento. "
