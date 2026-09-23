@@ -2,6 +2,11 @@ name: Stats4Bets Collector Step 4 Supabase
 
 "on":
   workflow_dispatch: {}
+  push:
+    branches:
+      - main
+    paths:
+      - collector.py
 
 permissions:
   contents: read
