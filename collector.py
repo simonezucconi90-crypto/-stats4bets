@@ -352,7 +352,13 @@ def main():
 
         matches = parse_list(page.content())
         if not matches:
-            raise RuntimeError("Nessuna Ottimo 1 trovata oggi.")
+            today_rome = datetime.now(ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y")
+            print(
+                f"Completato: nessuna nuova partita Ottimo 1 disponibile "
+                f"per il {today_rome}."
+            )
+            browser.close()
+            return
 
         records = []
         for index, match in enumerate(matches, 1):
