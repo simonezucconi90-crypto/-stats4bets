@@ -305,24 +305,21 @@ def latest_collector_run():
     return runs[0] if runs else None
 
 
-def wait_for_collector(timeout_seconds=150, poll_seconds=5):
+def wait_for_collector(previous_run_id=None, timeout_seconds=150, poll_seconds=5):
+    """Aspetta esclusivamente la sessione avviata dal clic corrente."""
     start = time.time()
-    initial = latest_collector_run()
-    initial_id = initial.get("id") if initial else None
 
     while time.time() - start < timeout_seconds:
         run = latest_collector_run()
-        if run:
-            run_id = run.get("id")
+        if run and run.get("id") != previous_run_id:
             status = run.get("status")
             conclusion = run.get("conclusion")
-            if run_id != initial_id or status in {"queued", "in_progress", "completed"}:
-                if status == "completed":
-                    return {
-                        "ok": conclusion == "success",
-                        "conclusion": conclusion,
-                        "url": run.get("html_url", ""),
-                    }
+            if status == "completed":
+                return {
+                    "ok": conclusion == "success",
+                    "conclusion": conclusion,
+                    "url": run.get("html_url", ""),
+                }
         time.sleep(poll_seconds)
 
     return {"ok": False, "conclusion": "timeout", "url": ""}
@@ -3983,10 +3980,14 @@ elif page == "🏠 Home":
             use_container_width=True,
         ):
             try:
+                previous_run = latest_collector_run()
+                previous_run_id = previous_run.get("id") if previous_run else None
                 trigger_collector_workflow()
                 st.success("Raccolta partite avviata.")
                 with st.spinner("Attendi circa 1-2 minuti..."):
-                    result = wait_for_collector()
+                    result = wait_for_collector(
+                        previous_run_id=previous_run_id
+                    )
 
                 if result["ok"]:
                     st.success("✅ Partite aggiornate.")
