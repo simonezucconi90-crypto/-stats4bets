@@ -726,7 +726,10 @@ def main():
 
     rapidapi_key = os.getenv("RAPIDAPI_KEY", "").strip()
     if not rapidapi_key:
-        raise RuntimeError("RAPIDAPI_KEY non disponibile nel workflow GitHub.")
+        print(
+            "RAPIDAPI_KEY non disponibile: continuo con le fonti "
+            "giornaliere gratuite."
+        )
 
     # Le vecchie fonti restano soltanto come fallback opzionale.
     football_data_key = os.getenv("FOOTBALLDATA_IO_KEY", "").strip()
