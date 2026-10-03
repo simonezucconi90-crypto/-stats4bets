@@ -18,6 +18,10 @@ ESPN_SCOREBOARD = (
     "https://site.api.espn.com/apis/site/v2/sports/"
     "soccer/all/scoreboard"
 )
+LIVESCORE_DAILY = (
+    "https://prod-public-api.livescore.com/v1/api/app/"
+    "date/soccer/{date}/0"
+)
 
 STAKE = 20.0
 LOOKBACK_DAYS = 14
@@ -172,6 +176,54 @@ def convert_sportapi_event(event, fallback_date=""):
         status.get("type") or status.get("description") or status.get("code"),
         date_iso,
     )
+
+
+def fetch_livescore_by_date(date_iso):
+    """Integra le competizioni minori non presenti nell'elenco ESPN."""
+    response = requests.get(
+        LIVESCORE_DAILY.format(date=date_iso.replace("-", "")),
+        params={"locale": "en", "MD": 1, "countryCode": "IT"},
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 Stats4Bets/1.0",
+        },
+        timeout=30,
+    )
+    response.raise_for_status()
+    fixtures = []
+    for stage in response.json().get("Stages") or []:
+        league = " - ".join(
+            x for x in (
+                str(stage.get("Cnm") or "").strip(),
+                str(stage.get("Snm") or "").strip(),
+            )
+            if x
+        )
+        for event in stage.get("Events") or []:
+            home_items = event.get("T1") or []
+            away_items = event.get("T2") or []
+            home = home_items[0].get("Nm") if home_items else ""
+            away = away_items[0].get("Nm") if away_items else ""
+            esd = str(event.get("Esd") or "")
+            event_date = date_iso
+            if len(esd) >= 8 and esd[:8].isdigit():
+                event_date = (
+                    f"{esd[:4]}-{esd[4:6]}-{esd[6:8]}"
+                )
+            fixtures.append(
+                build_fixture(
+                    "LiveScore",
+                    event.get("Eid"),
+                    home,
+                    away,
+                    league,
+                    event.get("Tr1"),
+                    event.get("Tr2"),
+                    event.get("Eps"),
+                    event_date,
+                )
+            )
+    return fixtures
 
 
 def fetch_espn_by_date(date_iso):
@@ -703,11 +755,23 @@ def main():
             fixtures = fetch_espn_by_date(date_iso)
             if not fixtures:
                 raise RuntimeError("nessuna partita restituita")
-            sportapi_cache[date_iso] = fixtures
             print(
                 f"ESPN {date_iso}: {len(fixtures)} "
                 f"partite disponibili con una sola richiesta."
             )
+            try:
+                livescore_fixtures = fetch_livescore_by_date(date_iso)
+                fixtures.extend(livescore_fixtures)
+                print(
+                    f"LIVESCORE {date_iso}: {len(livescore_fixtures)} "
+                    f"partite aggiuntive disponibili."
+                )
+            except Exception as livescore_exc:
+                print(
+                    f"ERRORE LIVESCORE su {date_iso}: "
+                    f"{livescore_exc}"
+                )
+            sportapi_cache[date_iso] = fixtures
         except Exception as espn_exc:
             print(f"ERRORE ESPN su {date_iso}: {espn_exc}")
             try:
@@ -775,7 +839,7 @@ def main():
             football_data_cache[date_iso] = []
 
     updated = waiting = uncertain = 0
-    used_espn = used_sofascore = used_sportapi = used_fd = used_tsdb = 0
+    used_espn = used_livescore = used_sofascore = used_sportapi = used_fd = used_tsdb = 0
 
     for i, match in enumerate(matches, 1):
         date_iso = str(match.get("date") or "")[:10]
@@ -878,6 +942,8 @@ def main():
         updated += 1
         if source == "ESPN":
             used_espn += 1
+        elif source == "LiveScore":
+            used_livescore += 1
         elif source == "SofaScore":
             used_sofascore += 1
         elif source == "SportAPI":
@@ -898,6 +964,7 @@ def main():
     )
     print(
         f"Fonti usate: ESPN={used_espn} | "
+        f"LiveScore={used_livescore} | "
         f"SofaScore={used_sofascore} | "
         f"SportAPI={used_sportapi} | "
         f"Footballdata.io={used_fd} | TheSportsDB={used_tsdb}"
