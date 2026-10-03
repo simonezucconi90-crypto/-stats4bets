@@ -55,6 +55,13 @@ TEAM_ALIASES = {
     "miami fc ii": "miami fc",
     "miami ii": "miami fc",
     "miami fc": "miami fc",
+    "airbus uk": "airbus uk",
+    "airbus uk broughton": "airbus uk",
+    "trefelin": "trefelin",
+    "trefelin bgc": "trefelin",
+    "cambrian clydach": "cambrian united",
+    "cambrian clydach vale": "cambrian united",
+    "cambrian united": "cambrian united",
 }
 
 def basic_normalize(value):
