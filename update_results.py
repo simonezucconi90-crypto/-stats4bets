@@ -13,6 +13,7 @@ THESPORTSDB_SEARCH = "https://www.thesportsdb.com/api/v1/json/123/searchevents.p
 THESPORTSDB_LOOKUP = "https://www.thesportsdb.com/api/v1/json/123/lookupevent.php"
 SPORTAPI_BASE = "https://sportapi7.p.rapidapi.com/api/v1"
 SPORTAPI_HOST = "sportapi7.p.rapidapi.com"
+SOFASCORE_BASE = "https://api.sofascore.com/api/v1"
 
 STAKE = 20.0
 LOOKBACK_DAYS = 14
@@ -167,6 +168,48 @@ def convert_sportapi_event(event, fallback_date=""):
         status.get("type") or status.get("description") or status.get("code"),
         date_iso,
     )
+
+
+def fetch_sofascore_by_date(date_iso):
+    """Una sola richiesta giornaliera, senza consumare la quota RapidAPI."""
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 Chrome/140 Safari/537.36"
+        ),
+        "Referer": "https://www.sofascore.com/",
+    }
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = requests.get(
+                f"{SOFASCORE_BASE}/sport/football/scheduled-events/{date_iso}",
+                headers=headers,
+                timeout=30,
+            )
+            if response.status_code == 429:
+                wait_seconds = 8 * (attempt + 1)
+                print(
+                    f"  ⏳ SofaScore limita le richieste: "
+                    f"attendo {wait_seconds}s e riprovo."
+                )
+                time.sleep(wait_seconds)
+                continue
+            response.raise_for_status()
+            events = response.json().get("events") or []
+            return [
+                convert_sportapi_event(event, date_iso)
+                | {"source": "SofaScore"}
+                for event in events
+            ]
+        except Exception as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(4 * (attempt + 1))
+    if last_error:
+        raise last_error
+    return []
 
 
 SPORTAPI_COUNTRY_ALIASES = {
@@ -577,22 +620,61 @@ def main():
     football_data_cache = {}
 
     for date_iso in dates:
+        # SofaScore restituisce l'intera giornata in una sola chiamata.
+        # RapidAPI resta come fallback, così un limite 429 non dimezza più
+        # gli aggiornamenti.
         try:
-            categories = fetch_sportapi_categories_by_date(date_iso, rapidapi_key)
-            needed = [m for m in matches if str(m.get("date") or "")[:10] == date_iso]
-            selected = [cid for cid, name in categories if any(sportapi_category_match(m.get("league") or "", name) for m in needed)]
-            category_ids = list(dict.fromkeys(selected or [cid for cid, _ in categories]))[:70]
-            fixtures = []
-            for category_id in category_ids:
-                try:
-                    fixtures.extend(fetch_sportapi_category_events(date_iso, category_id, rapidapi_key))
-                except Exception as category_exc:
-                    print(f"  SPORTAPI categoria {category_id} saltata: {category_exc}")
+            fixtures = fetch_sofascore_by_date(date_iso)
             sportapi_cache[date_iso] = fixtures
-            print(f"SPORTAPI {date_iso}: {len(fixtures)} partite disponibili ({len(category_ids)} categorie consultate).")
-        except Exception as exc:
-            sportapi_cache[date_iso] = []
-            print(f"ERRORE SPORTAPI su {date_iso}: {exc}")
+            print(
+                f"SOFASCORE {date_iso}: {len(fixtures)} "
+                f"partite disponibili con una sola richiesta."
+            )
+        except Exception as sofa_exc:
+            print(f"ERRORE SOFASCORE su {date_iso}: {sofa_exc}")
+            try:
+                categories = fetch_sportapi_categories_by_date(
+                    date_iso, rapidapi_key
+                )
+                needed = [
+                    m for m in matches
+                    if str(m.get("date") or "")[:10] == date_iso
+                ]
+                selected = [
+                    cid for cid, name in categories
+                    if any(
+                        sportapi_category_match(
+                            m.get("league") or "", name
+                        )
+                        for m in needed
+                    )
+                ]
+                category_ids = list(
+                    dict.fromkeys(
+                        selected or [cid for cid, _ in categories]
+                    )
+                )[:70]
+                fixtures = []
+                for category_id in category_ids:
+                    try:
+                        fixtures.extend(
+                            fetch_sportapi_category_events(
+                                date_iso, category_id, rapidapi_key
+                            )
+                        )
+                    except Exception as category_exc:
+                        print(
+                            f"  SPORTAPI categoria {category_id} "
+                            f"saltata: {category_exc}"
+                        )
+                sportapi_cache[date_iso] = fixtures
+                print(
+                    f"SPORTAPI {date_iso}: {len(fixtures)} partite "
+                    f"disponibili ({len(category_ids)} categorie consultate)."
+                )
+            except Exception as exc:
+                sportapi_cache[date_iso] = []
+                print(f"ERRORE SPORTAPI su {date_iso}: {exc}")
 
         if football_data_key:
             try:
@@ -606,7 +688,7 @@ def main():
             football_data_cache[date_iso] = []
 
     updated = waiting = uncertain = 0
-    used_sportapi = used_fd = used_tsdb = 0
+    used_sofascore = used_sportapi = used_fd = used_tsdb = 0
 
     for i, match in enumerate(matches, 1):
         date_iso = str(match.get("date") or "")[:10]
@@ -617,9 +699,11 @@ def main():
         )
 
         if fixture and safe:
-            fixture["source"] = "SportAPI"
+            primary_source = fixture.get("source") or "SportAPI"
+            fixture["source"] = primary_source
             print(
-                f'  SPORTAPI candidata: {details.get("api_home")} - '
+                f'  {primary_source.upper()} candidata: '
+                f'{details.get("api_home")} - '
                 f'{details.get("api_away")} | confidenza={confidence:.3f}'
             )
         else:
@@ -705,7 +789,9 @@ def main():
         client.table("matches").update(values).eq("id", match["id"]).execute()
 
         updated += 1
-        if source == "SportAPI":
+        if source == "SofaScore":
+            used_sofascore += 1
+        elif source == "SportAPI":
             used_sportapi += 1
         elif source == "Footballdata.io":
             used_fd += 1
@@ -722,7 +808,8 @@ def main():
         f"{uncertain} non trovate/abbinate con sicurezza."
     )
     print(
-        f"Fonti usate: SportAPI={used_sportapi} | "
+        f"Fonti usate: SofaScore={used_sofascore} | "
+        f"SportAPI={used_sportapi} | "
         f"Footballdata.io={used_fd} | TheSportsDB={used_tsdb}"
     )
 
