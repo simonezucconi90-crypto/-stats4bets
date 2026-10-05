@@ -2439,7 +2439,7 @@ def strategy_follow_display_row(definitive, state, closed=None):
 ELITE_MIN_MATCHES = 80
 ELITE_MIN_OBSERVATIONS = 5
 ELITE_RECENT_WINDOW = 50
-ELITE_MAX_ROWS = 12
+ELITE_MAX_ROWS = 6
 
 WATCH_MIN_MATCHES = 70
 WATCH_MIN_OBSERVATIONS = 5
@@ -4565,11 +4565,11 @@ elif page == "🧪 Laboratorio Strategie":
 
 
 elif page == "🧠 Trova metodo migliore":
-    st.subheader("🧠 Motore Strategie V3.1 - Ottimizzato")
+    st.subheader("🏆 Strategie — decisione rapida")
     st.caption(
-        "Cerca combinazioni tra indicatori, range quota, movimento quota, "
-        "value rispetto alla quota reale e allibramento. Confronta ogni "
-        "strategia con la base 'gioco tutte' e ne verifica la stabilità nel tempo."
+        "Qui trovi soltanto ciò che serve per decidere: stato della strategia "
+        "ufficiale, Classifica Elite e grafico. Tutte le verifiche tecniche "
+        "restano disponibili nella sezione avanzata."
     )
 
     df = get_matches()
@@ -4578,67 +4578,47 @@ elif page == "🧠 Trova metodo migliore":
     if closed.empty:
         st.info("Servono partite concluse per cercare strategie.")
     else:
-        s1, s2, s3, s4 = st.columns(4)
-
         default_min = min(10, max(1, len(closed)))
-        min_sample = s1.number_input(
-            "Campione minimo",
-            min_value=1,
-            max_value=max(1, len(closed)),
-            value=default_min,
-            step=1,
-        )
+        min_sample = default_min
+        max_filters = 3
+        top_n = 50
+        validation_pct = 30
 
-        max_filters = s2.selectbox(
-            "Filtri massimi",
-            [1, 2, 3],
-            index=2,
-        )
-
-        top_n = s3.selectbox(
-            "Strategie da mostrare",
-            [20, 50, 100],
-            index=1,
-        )
-
-        validation_pct = s4.selectbox(
-            "Quota dati per verifica",
-            [20, 30, 40],
-            index=1,
-        )
+        with st.expander("⚙️ Impostazioni ricerca (opzionali)", expanded=False):
+            st.caption(
+                "I valori consigliati sono già impostati. Modificali soltanto "
+                "se vuoi fare una ricerca sperimentale."
+            )
+            min_sample = st.number_input(
+                "Campione minimo",
+                min_value=1,
+                max_value=max(1, len(closed)),
+                value=default_min,
+                step=1,
+            )
+            max_filters = st.selectbox(
+                "Filtri massimi",
+                [1, 2, 3],
+                index=2,
+            )
+            top_n = st.selectbox(
+                "Strategie analizzate dal motore",
+                [20, 50, 100],
+                index=1,
+            )
+            validation_pct = st.selectbox(
+                "Quota dati per verifica",
+                [20, 30, 40],
+                index=1,
+            )
 
         if len(closed) < 30:
             st.warning(
-                f"Hai solo {len(closed)} partite concluse: la classifica è ancora "
-                "esplorativa. La validazione diventerà più significativa con più dati."
+                f"Hai solo {len(closed)} partite concluse: i risultati sono "
+                "ancora esplorativi e diventeranno più affidabili con più dati."
             )
-        else:
-            st.info(
-                "Il motore usa la parte iniziale dello storico per individuare "
-                "la strategia e la parte più recente per verificarla."
-            )
-
-        st.markdown("### 📊 Analisi range quote")
-        st.caption(
-            "Qui vedi chiaramente come rendono le diverse fasce di quota da sole. "
-            "Gli stessi range vengono anche combinati automaticamente con gli altri filtri."
-        )
 
         odds_table = odds_range_analysis(closed)
-        if not odds_table.empty:
-            st.dataframe(
-                odds_table,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        with st.expander("Vedi tutti i range quota provati dal motore"):
-            st.write(
-                ", ".join(
-                    f"{low:.2f}+" if high >= 99 else f"{low:.2f}–{high:.2f}"
-                    for low, high in STRATEGY_ODDS_RANGES
-                )
-            )
 
         current_engine_signature = strategy_engine_signature(
             closed,
@@ -4722,441 +4702,183 @@ elif page == "🧠 Trova metodo migliore":
         )
 
         if isinstance(ranking, pd.DataFrame) and not ranking.empty:
-            with st.expander(
-                "🔧 Dettagli tecnici e classifiche complete",
-                expanded=False,
-            ):
-                st.markdown("### 🧪 Classifica completa del motore")
+            # I calcoli completi restano attivi, ma la pagina principale
+            # mostra soltanto le informazioni operative.
+            ensure_current_strategy_snapshot(ranking)
+            history_table, snapshot_count = strategy_history_summary(
+                ranking["Strategia"].tolist(),
+                current_ranking=ranking,
+            )
+            definitive = definitive_strategy_ranking(
+                ranking,
+                history_table,
+                snapshot_count,
+                selections,
+            )
+            follow_state, follow_message = update_strategy_follow_state(
+                definitive
+            )
+            official_row = strategy_follow_display_row(
+                definitive,
+                follow_state,
+                closed=closed,
+            )
+            elite_table = build_elite_ranking(
+                ranking=ranking,
+                history_table=history_table,
+                snapshot_count=snapshot_count,
+                selections=selections,
+                closed=closed,
+                official_state=follow_state,
+            )
 
-                display_ranking = ranking.drop(columns=["ID"]).copy()
+            st.markdown("### 🚦 Cosa fare adesso")
+            official_name_now = ""
+            health = None
+
+            if isinstance(follow_state, dict):
+                official_name_now = str(
+                    follow_state.get("official") or ""
+                )
+
+            if official_name_now and official_row is not None:
+                official_selected_now = apply_generated_strategy_name(
+                    closed,
+                    official_name_now,
+                )
+                health = official_operational_status(
+                    official_selected_now
+                )
+                official_currently_usable = (
+                    int(official_row.get("Partite", 0) or 0)
+                    >= ELITE_MIN_MATCHES
+                    and float(official_row.get("ROI %", 0) or 0) > 0
+                    and float(official_row.get("Profitto €", 0) or 0) > 0
+                )
+
+                if (
+                    not official_currently_usable
+                    or health["status"].startswith("🔴")
+                ):
+                    operational_label = "⛔ NON DA SEGUIRE"
+                    st.error(
+                        f"⛔ NON DA SEGUIRE — "
+                        f"{human_strategy_name(official_name_now)}"
+                    )
+                elif health["status"].startswith("🟡"):
+                    operational_label = "⚠️ DA SEGUIRE CON CAUTELA"
+                    st.warning(
+                        f"⚠️ DA SEGUIRE CON CAUTELA — "
+                        f"{human_strategy_name(official_name_now)}"
+                    )
+                elif health["status"].startswith("🟢"):
+                    operational_label = "✅ DA SEGUIRE"
+                    st.success(
+                        f"✅ DA SEGUIRE — "
+                        f"{human_strategy_name(official_name_now)}"
+                    )
+                else:
+                    operational_label = "⚪ DATI INSUFFICIENTI"
+                    st.info(
+                        f"⚪ DATI INSUFFICIENTI — "
+                        f"{human_strategy_name(official_name_now)}"
+                    )
+
+                o1, o2 = st.columns(2)
+                o3, o4 = st.columns(2)
+                o1.metric(
+                    "Partite",
+                    int(official_row.get("Partite", 0) or 0),
+                )
+                o2.metric(
+                    "ROI",
+                    f'{float(official_row.get("ROI %", 0) or 0):.2f}%',
+                )
+                o3.metric(
+                    "Profitto",
+                    f'€ {float(official_row.get("Profitto €", 0) or 0):.2f}',
+                )
+                o4.metric(
+                    "ROI ultime 50",
+                    f'{float(health.get("roi50", 0) or 0):.2f}%',
+                )
+                st.caption(
+                    "La strategia ufficiale non viene sostituita automaticamente: "
+                    "un'eventuale alternativa Elite deve prima superare tutte le "
+                    "conferme previste."
+                )
+            else:
+                operational_label = "⚪ NESSUNA UFFICIALE"
+                st.info(
+                    "Non c'è ancora una strategia ufficiale consolidata da seguire."
+                )
+
+            st.markdown("### 🏆 Classifica Elite")
+            st.caption(
+                "È l'unica classifica principale: contiene poche strategie mature "
+                "e stabili. Le alternative Elite restano in osservazione finché "
+                "non diventano ufficiali."
+            )
+
+            if elite_table.empty:
+                st.info(
+                    "Nessuna strategia ha ancora tutti i requisiti Elite. "
+                    "Il motore continua comunque a raccogliere dati."
+                )
+            else:
+                elite_display = add_human_strategy_column(
+                    elite_table
+                ).copy()
+                elite_display["Indicazione"] = (
+                    "👀 ELITE — NON ANCORA UFFICIALE"
+                )
+
+                if official_name_now:
+                    official_mask = (
+                        elite_table["Strategia"].astype(str)
+                        == official_name_now
+                    )
+                    elite_display.loc[
+                        official_mask,
+                        "Indicazione",
+                    ] = operational_label
+
+                elite_columns = [
+                    "Posizione Elite",
+                    "Strategia",
+                    "Indicazione",
+                    "Punteggio Elite",
+                    "Partite",
+                    "ROI %",
+                    "Profitto €",
+                    "Stabilità %",
+                    "ROI ultime 50 %",
+                ]
                 st.dataframe(
-                    display_ranking,
+                    elite_display[
+                        [
+                            column
+                            for column in elite_columns
+                            if column in elite_display.columns
+                        ]
+                    ],
                     use_container_width=True,
                     hide_index=True,
                 )
 
-                st.caption(
-                    "✅ = ROI positivo sia nella parte di ricerca sia nella parte "
-                    "più recente usata per la verifica. ⚠️ = da considerare esplorativa."
-                )
-                st.caption(
-                    "Profitto / 100€ mostra quanto rende la strategia ogni 100 € "
-                    "complessivamente puntati: è utile per confrontare strategie "
-                    "con profitti simili ma capitale impiegato diverso."
-                )
-                st.caption(
-                    "Δ ROI vs base mostra quanto il filtro migliora o peggiora rispetto "
-                    "a giocare tutte le partite. Stabilità controlla il rendimento in "
-                    "3 blocchi cronologici separati."
-                )
-
-                history_result = st.session_state.get("strategy_history_result")
-
-                if isinstance(history_result, dict):
-                    if not history_result.get("ok"):
-                        st.warning(
-                            "📚 Storico classifica non ancora attivo: "
-                            + history_result.get("message", "")
-                        )
-                    elif history_result.get("saved"):
-                        st.success("📚 " + history_result.get("message", ""))
-
-                # Sincronizza lo storico con la classifica realmente
-                # visualizzata prima di calcolare Top 5 / Top 10.
-                sync_history_result = ensure_current_strategy_snapshot(
-                    ranking
-                )
-
-                if not sync_history_result.get("ok"):
-                    st.warning(
-                        "⚠️ Impossibile sincronizzare lo storico: "
-                        + sync_history_result.get("message", "")
-                    )
-
-                history_table, snapshot_count = strategy_history_summary(
-                    ranking["Strategia"].tolist(),
-                    current_ranking=ranking,
-                )
-
-                try:
-                    _all_history_rows = fetch_all_strategy_history_rows()
-                    _real_history_rows = [
-                        r for r in _all_history_rows
-                        if not str(r.get("strategy") or "").startswith(
-                            SYSTEM_STATE_PREFIX
-                        )
-                    ]
-                    st.caption(
-                        f"📚 Storico caricato: {len(_real_history_rows)} righe reali "
-                        f"su {snapshot_count} snapshot distinti."
-                    )
-                except Exception:
-                    pass
-
-                st.markdown("### 🧭 Stabilità della classifica")
-
-                if snapshot_count == 0:
-                    st.info(
-                        "Lo storico partirà dal primo snapshot salvato. "
-                        "Dopo alcuni cambiamenti della classifica inizierai "
-                        "a vedere quali strategie rimangono davvero in alto."
-                    )
-                else:
-                    st.caption(
-                        f"Snapshot distinti salvati: {snapshot_count}. "
-                        "Top 5 % indica in quanti snapshot, dalla prima "
-                        "comparsa della strategia, è rimasta nelle prime 5. "
-                        "La classifica viene salvata solo quando cambia, "
-                        "quindi premere il tasto più volte non altera i dati."
-                    )
-
-                    if snapshot_count < 5:
-                        st.warning(
-                            "Lo storico è ancora molto giovane: con meno "
-                            "di 5 snapshot le percentuali sono solo indicative."
-                        )
-
-                    if not history_table.empty:
-                        current_positions = {
-                            str(row["Strategia"]): pos
-                            for pos, (_, row) in enumerate(
-                                ranking.iterrows(),
-                                start=1,
-                            )
-                        }
-
-                        mismatch_count = 0
-                        for _, hist_row in history_table.iterrows():
-                            strategy_name = str(hist_row.get("Strategia", ""))
-                            current_pos = current_positions.get(strategy_name)
-                            last_pos = hist_row.get("Ultima posizione")
-                            if (
-                                current_pos is not None
-                                and pd.notna(last_pos)
-                                and int(last_pos) != int(current_pos)
-                            ):
-                                mismatch_count += 1
-
-                        if mismatch_count > 0:
-                            st.error(
-                                f"❌ Controllo storico: {mismatch_count} strategie "
-                                "non risultano allineate nemmeno dopo il recupero "
-                                "dello snapshot corrente."
-                            )
-                        else:
-                            virtual_used = (
-                                "_virtual_current" in history_table.columns
-                                and history_table["_virtual_current"]
-                                .fillna(False)
-                                .astype(bool)
-                                .any()
-                            )
-
-                            if virtual_used:
-                                st.info(
-                                    "✅ Classifica corrente allineata ai calcoli. "
-                                    "Lo snapshot corrente è stato aggiunto in memoria "
-                                    "senza modificare né cancellare lo storico salvato."
-                                )
-                            else:
-                                st.success(
-                                    "✅ Storico salvato e classifica corrente sincronizzati."
-                                )
-
-                        history_display = history_table.drop(
-                            columns=["_virtual_current"],
-                            errors="ignore",
-                        )
-
-                        st.dataframe(
-                            history_display.head(20),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-
-                st.markdown("### 🏆 Classifica Definitiva")
-                st.caption(
-                    "Questa è la classifica da guardare: combina automaticamente rendimento attuale, "
-                    "campione, validazione, stabilità e storico. Il peso dello storico aumenta "
-                    "automaticamente man mano che crescono le rilevazioni."
-                )
-
-                definitive = definitive_strategy_ranking(
-                    ranking,
-                    history_table,
-                    snapshot_count,
-                    selections,
-                )
-
-                if not definitive.empty:
-                    winner = definitive.iloc[0]
-                    st.success(
-                        f'🥇 Strategia consigliata adesso: {winner["Strategia"]} '
-                        f'— punteggio definitivo {winner["Punteggio definitivo"]:.2f} '
-                        f'— {winner["Stato"]}'
-                    )
-                    duplicates_removed = int(
-                        pd.to_numeric(
-                            definitive["Duplicati rimossi"],
-                            errors="coerce",
-                        ).fillna(0).sum()
-                    ) if "Duplicati rimossi" in definitive.columns else 0
-
-                    if duplicates_removed > 0:
-                        st.caption(
-                            f"🧹 Strategie equivalenti eliminate automaticamente: "
-                            f"{duplicates_removed}. Ogni riga rimasta seleziona "
-                            f"un gruppo realmente diverso di partite."
-                        )
-
-                    st.dataframe(
-                        definitive,
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-
-                    if snapshot_count < 5:
-                        st.info(
-                            "La prima posizione è già calcolata automaticamente, ma lo storico è ancora giovane. "
-                            "Il peso della stabilità crescerà automaticamente fino a 10 snapshot."
-                        )
-
-                st.markdown("### 🎯 Strategia ufficiale da seguire")
-
-                follow_state, follow_message = update_strategy_follow_state(
-                    definitive
-                )
-                official_row = strategy_follow_display_row(
-                    definitive,
+                decision_message = elite_decision_message(
+                    elite_table,
                     follow_state,
-                    closed=closed,
                 )
-
-                if follow_state and official_row is not None:
-                    consolidated = bool(
-                        follow_state.get("official_consolidated", False)
-                    )
-                    official_currently_usable = (
-                        int(official_row.get("Partite", 0) or 0) >= ELITE_MIN_MATCHES
-                        and float(official_row.get("ROI %", 0) or 0) > 0
-                        and float(official_row.get("Profitto €", 0) or 0) > 0
-                    )
-                    if consolidated and official_currently_usable:
-                        official_badge = "🟢 CONFERMATA"
-                        st.success(
-                            f'🎯 {official_badge} — '
-                            f'{human_strategy_name(follow_state.get("official", ""))}'
-                        )
-                    else:
-                        official_badge = "⚠️ PRECEDENTE UFFICIALE / DA RIVALUTARE"
-                        st.warning(
-                            f'🎯 {official_badge} — '
-                            f'{human_strategy_name(follow_state.get("official", ""))}'
-                        )
-
-                    o1, o2, o3, o4 = st.columns(4)
-                    o1.metric(
-                        "Punteggio",
-                        f'{float(official_row.get("Punteggio definitivo", 0) or 0):.2f}',
-                    )
-                    o2.metric(
-                        "Partite",
-                        int(official_row.get("Partite", 0) or 0),
-                    )
-                    o3.metric(
-                        "ROI",
-                        f'{float(official_row.get("ROI %", 0) or 0):.2f}%',
-                    )
-                    o4.metric(
-                        "Profitto",
-                        f'€ {float(official_row.get("Profitto €", 0) or 0):.2f}',
-                    )
-
-                    st.caption(
-                        "🔄 Partite, ROI e profitto della strategia ufficiale "
-                        "sono ricalcolati in tempo reale sul database attuale "
-                        "con gli stessi identici filtri usati dal motore."
-                    )
-
-                    # Stato operativo: separato dalla scelta della strategia ufficiale.
-                    official_name_now = str(
-                        follow_state.get("official") or ""
-                    )
-                    official_selected_now = (
-                        apply_generated_strategy_name(
-                            closed,
-                            official_name_now,
-                        )
-                        if official_name_now
-                        else pd.DataFrame()
-                    )
-                    health = official_operational_status(
-                        official_selected_now
-                    )
-
-                    st.markdown("#### 🚦 Stato operativo dell'ufficiale")
-
-                    if health["status"].startswith("🟢"):
-                        st.success(
-                            "🟢 SEGUI — andamento recente compatibile "
-                            "con una strategia ancora sana."
-                        )
-                    elif health["status"].startswith("🟡"):
-                        st.warning(
-                            "🟡 SEGUI CON CAUTELA — la strategia resta "
-                            "ufficiale, ma l'andamento recente è deteriorato."
-                        )
-                    elif health["status"].startswith("🔴"):
-                        st.error(
-                            "🔴 SOSPENDI — deterioramento forte e persistente. "
-                            "Non giocare nuove selezioni dell'ufficiale finché "
-                            "lo stato operativo non migliora."
-                        )
-                    else:
-                        st.info("⚪ Dati insufficienti per lo stato operativo.")
-
-                    h1, h2, h3, h4 = st.columns(4)
-                    h1.metric("ROI ultime 20", f'{health["roi20"]:.2f}%')
-                    h2.metric("ROI ultime 50", f'{health["roi50"]:.2f}%')
-                    h3.metric(
-                        "Drawdown dal massimo",
-                        f'€ {health["drawdown_eur"]:.2f}',
-                    )
-                    h4.metric(
-                        "Drawdown %",
-                        f'{health["drawdown_pct"]:.1f}%',
-                    )
-
-                    with st.expander("ℹ️ Come viene deciso lo stato operativo"):
-                        st.write(
-                            "🟢 SEGUI: ROI recente non negativo e drawdown sotto il 35%."
-                        )
-                        st.write(
-                            "🟡 SEGUI CON CAUTELA: almeno uno tra ROI ultime 20, "
-                            "ROI ultime 50 o drawdown segnala deterioramento."
-                        )
-                        st.write(
-                            "🔴 SOSPENDI: con almeno 50 partite servono insieme "
-                            "ROI ultime 20 ≤ -10%, ROI ultime 50 ≤ -5% e "
-                            "drawdown dal massimo ≥ 50%."
-                        )
-                        st.caption(
-                            "Lo stato operativo NON sostituisce automaticamente "
-                            "la strategia ufficiale e NON modifica lo storico."
-                        )
-
-                    challenger = str(follow_state.get("challenger") or "")
-                    streak = int(
-                        follow_state.get("challenger_streak", 0) or 0
-                    )
-
-                    if challenger:
-                        st.warning(
-                            f"🧪 Miglior sfidante: {challenger} — "
-                            f"{streak}/{CHALLENGER_REQUIRED_STREAK} "
-                            f"conferme consecutive. NON cambiare ancora strategia."
-                        )
-                    else:
-                        st.info(
-                            "✅ Nessuno sfidante ha ancora i requisiti "
-                            "per chiedere un cambio."
-                        )
-
-                    st.caption(follow_message)
-                    st.caption(
-                        "Il cambio automatico avviene solo quando uno "
-                        "sfidante sufficientemente solido supera l'ufficiale "
-                        f"di almeno {CHALLENGER_MIN_SCORE_ADVANTAGE:.0f} punti "
-                        f"per {CHALLENGER_REQUIRED_STREAK} rilevazioni consecutive."
-                    )
-
-                st.markdown("### 🏆 Classifica Elite — quella da guardare")
-                st.caption(
-                    "Questa è la classifica decisionale: mostra solo strategie "
-                    "già abbastanza solide. Le provvisorie sono escluse, i duplicati "
-                    "sono rimossi e il confronto recente usa le ultime "
-                    f"{ELITE_RECENT_WINDOW} partite di ciascuna strategia."
-                )
-
-                elite_table = build_elite_ranking(
-                    ranking=ranking,
-                    history_table=history_table,
-                    snapshot_count=snapshot_count,
-                    selections=selections,
-                    closed=closed,
-                    official_state=follow_state,
-                )
-
-                if elite_table.empty:
-                    st.info(
-                        "Nessuna strategia ha ancora tutti i requisiti Elite. "
-                        "La strategia ufficiale resta comunque monitorata."
-                    )
+                if decision_message.startswith("✅"):
+                    st.success(decision_message)
                 else:
-                    decision_message = elite_decision_message(
-                        elite_table,
-                        follow_state,
-                    )
+                    st.info(decision_message)
 
-                    if decision_message.startswith("✅"):
-                        st.success(decision_message)
-                    else:
-                        st.info(decision_message)
-
-                    elite_display = add_human_strategy_column(elite_table)
-                    st.dataframe(
-                        elite_display,
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-
-                    st.caption(
-                        f"Requisiti base Elite: almeno {ELITE_MIN_MATCHES} partite, "
-                        f"{ELITE_MIN_OBSERVATIONS} rilevazioni, validazione ✅ "
-                        "e stabilità almeno 66,7%. "
-                        f"Vengono mostrate al massimo {ELITE_MAX_ROWS} strategie."
-                    )
-
-                st.markdown("### 👀 Strategie in osservazione forte — poche ma serie")
-                st.caption(
-                    "Solo strategie già mature e profittevoli che non sono ancora Elite. "
-                    "Le strategie nuove o con pochi dati continuano a essere studiate dal motore, "
-                    "ma non vengono mostrate qui."
-                )
-
-                strong_watch = build_strong_watchlist(
-                    ranking, history_table, snapshot_count, selections, closed, elite_table
-                )
-
-                if strong_watch.empty:
-                    st.info("Nessun'altra strategia abbastanza consolidata da mostrare adesso.")
-                else:
-                    strong_watch_display = add_human_strategy_column(strong_watch)
-                    st.dataframe(
-                        strong_watch_display,
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-                    st.caption(
-                        f"Minimo {WATCH_MIN_MATCHES} partite, {WATCH_MIN_OBSERVATIONS} rilevazioni, "
-                        f"ROI e profitto positivi, validazione ✅ e stabilità almeno "
-                        f"{WATCH_MIN_STABILITY:.1f}%. Massimo {WATCH_MAX_ROWS} strategie."
-                    )
-
-            st.markdown("### 🧪 Laboratorio / dettagli")
-            with st.expander(
-                "Apri classifica completa, strategie provvisorie e dettagli",
-                expanded=False,
-            ):
-                st.caption(
-                    "Questa parte serve per ricerca e sperimentazione. "
-                    "Per decidere cosa seguire usa la Classifica Elite sopra."
-                )
-
-            st.markdown("### 🔎 Apri una strategia Élite con il grafico")
+            st.markdown("### 📈 Apri una strategia Elite")
             st.caption(
-                "Questo elenco prende le strategie esclusivamente dalla "
-                "Classifica Élite mostrata sopra, nello stesso ordine."
+                "Scegli una voce della Classifica Elite per vedere il suo "
+                "andamento. L'elenco mantiene lo stesso ordine della classifica."
             )
 
             detail_ranking = (
@@ -5167,237 +4889,231 @@ elif page == "🧠 Trova metodo migliore":
 
             if detail_ranking.empty:
                 st.info(
-                    "Al momento non ci sono strategie Élite disponibili da aprire."
-                )
-                st.stop()
-
-            elite_list_columns = [
-                column
-                for column in [
-                    "Strategia", "Partite", "ROI %",
-                    "Profitto €", "Stabilità %"
-                ]
-                if column in detail_ranking.columns
-            ]
-            st.dataframe(
-                detail_ranking[elite_list_columns],
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            ranking_ids = (
-                ranking.set_index("Strategia")["ID"].to_dict()
-                if "ID" in ranking.columns
-                else {}
-            )
-            strategy_map = {}
-            for elite_position, (_, row) in enumerate(
-                detail_ranking.iterrows(),
-                start=1,
-            ):
-                strategy_name_value = str(row["Strategia"])
-                label = (
-                    f'🏆 Élite #{elite_position} — {strategy_name_value} | '
-                    f'ROI {float(row["ROI %"]):.2f}% | '
-                    f'€ {float(row["Profitto €"]):.2f} | '
-                    f'{int(row["Partite"])} partite'
-                )
-                strategy_map[label] = {
-                    "id": ranking_ids.get(strategy_name_value, ""),
-                    "name": strategy_name_value,
-                }
-
-            selected_label = st.selectbox(
-                "Strategia Élite",
-                list(strategy_map.keys()),
-                key="strategy_detail_elite_v3",
-            )
-            selected_strategy = strategy_map[selected_label]
-            strategy_id = selected_strategy["id"]
-            strategy_name = selected_strategy["name"]
-
-            # Ricalcolo sempre le partite concluse sul database attuale.
-            # Non dipendiamo dagli indici memorizzati dall'ultima ricerca.
-            selected_df = apply_generated_strategy_name(
-                closed,
-                strategy_name,
-            )
-
-            if not selected_df.empty:
-                stats = strategy_statistics(selected_df)
-
-                a, b, c, d = st.columns(4)
-                a.metric("Partite", stats["closed"])
-                b.metric("🟢 Vinte", stats["wins"])
-                c.metric("🔴 Perse", stats["losses"])
-                d.metric("Win rate", f'{stats["win_rate"]:.2f}%')
-
-                e, f, g, h = st.columns(4)
-                e.metric("Profitto", f'€ {stats["profit"]:.2f}')
-                f.metric("ROI", f'{stats["roi"]:.2f}%')
-                g.metric("Quota media", f'{stats["avg_odds"]:.2f}')
-                h.metric(
-                    "Max perdite consecutive",
-                    stats["max_losing_streak"],
-                )
-
-                detail = selected_df.sort_values(
-                    ["date", "time", "id"]
-                ).copy()
-                detail["Esito"] = detail["outcome"].map(
-                    {"V": "🟢 V", "P": "🔴 P"}
-                )
-                detail["Quota"] = pd.to_numeric(
-                    detail["current_odds"], errors="coerce"
-                ).round(2)
-                detail["Profitto €"] = pd.to_numeric(
-                    detail["profit"], errors="coerce"
-                ).round(2)
-
-                shown = detail[[
-                    "date", "time", "league", "match_name",
-                    "Quota", "allibramento_color", "mtr",
-                    "scl", "cal", "Esito", "final_score",
-                    "Profitto €"
-                ]].rename(columns={
-                    "date": "Data",
-                    "time": "Ora",
-                    "league": "Campionato",
-                    "match_name": "Partita",
-                    "allibramento_color": "ALLB",
-                    "mtr": "MTR",
-                    "scl": "SCL",
-                    "cal": "CAL",
-                    "final_score": "Risultato",
-                })
-
-                st.dataframe(
-                    shown.sort_values(
-                        ["Data", "Ora"],
-                        ascending=[False, False],
-                        na_position="last",
-                    ),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-
-                curve = detail.copy()
-                curve["Profitto cumulato"] = pd.to_numeric(
-                    curve["profit"], errors="coerce"
-                ).fillna(0).cumsum()
-                curve["Progressivo"] = range(1, len(curve) + 1)
-
-                st.markdown("### 📈 Profitto cumulato")
-                st.line_chart(
-                    curve.set_index("Progressivo")["Profitto cumulato"]
-                )
-
-            # Mostra anche le partite ancora aperte che rispettano
-            # esattamente la stessa regola della strategia selezionata.
-            pending_now = (
-                df[~df["outcome"].isin(["V", "P"])].copy()
-                if not df.empty
-                else pd.DataFrame(columns=ALL_COLUMNS)
-            )
-            selected_pending = apply_generated_strategy_name(
-                pending_now,
-                strategy_name,
-            )
-
-            st.markdown("### ⏳ Partite attuali da giocare")
-            st.metric(
-                "Partite in attesa compatibili",
-                len(selected_pending),
-            )
-            st.caption(
-                "Queste partite rispettano oggi la strategia selezionata, "
-                "ma entreranno nelle statistiche soltanto dopo l'inserimento dell'esito."
-            )
-
-            if selected_pending.empty:
-                st.info(
-                    "Nessuna partita in attesa rispetta questa strategia."
+                    "Al momento non ci sono strategie Elite disponibili da aprire."
                 )
             else:
-                upcoming = selected_pending.copy()
-                upcoming["Quota"] = pd.to_numeric(
-                    upcoming["current_odds"],
-                    errors="coerce",
-                ).round(2)
-                upcoming["Quota reale"] = pd.to_numeric(
-                    upcoming["fair_odds"],
-                    errors="coerce",
-                ).round(2)
-                upcoming["Value %"] = pd.to_numeric(
-                    upcoming["_value_vs_fair_pct"],
-                    errors="coerce",
-                ).round(2)
+                ranking_ids = (
+                    ranking.set_index("Strategia")["ID"].to_dict()
+                    if "ID" in ranking.columns
+                    else {}
+                )
+                strategy_map = {}
+                for elite_position, (_, row) in enumerate(
+                    detail_ranking.iterrows(),
+                    start=1,
+                ):
+                    strategy_name_value = str(row["Strategia"])
+                    label = (
+                        f'🏆 Elite #{elite_position} — '
+                        f'{human_strategy_name(strategy_name_value)}'
+                    )
+                    strategy_map[label] = {
+                        "id": ranking_ids.get(strategy_name_value, ""),
+                        "name": strategy_name_value,
+                    }
 
-                upcoming = upcoming[[
-                    "date", "time", "league", "match_name",
-                    "Quota", "Quota reale", "Value %",
-                    "mtr", "qi_qa", "status",
-                ]].rename(columns={
-                    "date": "Data",
-                    "time": "Ora",
-                    "league": "Campionato",
-                    "match_name": "Partita",
-                    "mtr": "MTR",
-                    "qi_qa": "QI/QA",
-                    "status": "STATUS",
-                })
+                selected_label = st.selectbox(
+                    "Strategia Elite",
+                    list(strategy_map.keys()),
+                    key="strategy_detail_elite_v4",
+                )
+                selected_strategy = strategy_map[selected_label]
+                strategy_name = selected_strategy["name"]
+                selected_df = apply_generated_strategy_name(
+                    closed,
+                    strategy_name,
+                )
 
+                if selected_df.empty:
+                    st.warning(
+                        "Questa strategia non ha partite concluse nel database attuale."
+                    )
+                else:
+                    stats = strategy_statistics(selected_df)
+                    selected_elite = detail_ranking[
+                        detail_ranking["Strategia"].astype(str)
+                        == strategy_name
+                    ].iloc[0]
+                    m1, m2 = st.columns(2)
+                    m3, m4 = st.columns(2)
+                    m1.metric("Partite", stats["closed"])
+                    m2.metric("ROI", f'{stats["roi"]:.2f}%')
+                    m3.metric("Profitto", f'€ {stats["profit"]:.2f}')
+                    m4.metric(
+                        "Stabilità",
+                        f'{float(selected_elite.get("Stabilità %", 0) or 0):.1f}%',
+                    )
+
+                    detail = selected_df.sort_values(
+                        ["date", "time", "id"]
+                    ).copy()
+                    curve = detail.copy()
+                    curve["Profitto cumulato"] = pd.to_numeric(
+                        curve["profit"],
+                        errors="coerce",
+                    ).fillna(0).cumsum()
+                    curve["Progressivo"] = range(
+                        1,
+                        len(curve) + 1,
+                    )
+                    st.line_chart(
+                        curve.set_index("Progressivo")[
+                            "Profitto cumulato"
+                        ]
+                    )
+
+                    with st.expander(
+                        "📋 Partite usate nel calcolo",
+                        expanded=False,
+                    ):
+                        detail["Esito"] = detail["outcome"].map(
+                            {"V": "🟢 V", "P": "🔴 P"}
+                        )
+                        detail["Quota"] = pd.to_numeric(
+                            detail["current_odds"],
+                            errors="coerce",
+                        ).round(2)
+                        detail["Profitto €"] = pd.to_numeric(
+                            detail["profit"],
+                            errors="coerce",
+                        ).round(2)
+                        shown = detail[[
+                            "date",
+                            "time",
+                            "league",
+                            "match_name",
+                            "Quota",
+                            "Esito",
+                            "final_score",
+                            "Profitto €",
+                        ]].rename(columns={
+                            "date": "Data",
+                            "time": "Ora",
+                            "league": "Campionato",
+                            "match_name": "Partita",
+                            "final_score": "Risultato",
+                        })
+                        st.dataframe(
+                            shown.sort_values(
+                                ["Data", "Ora"],
+                                ascending=[False, False],
+                                na_position="last",
+                            ),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                    pending_now = (
+                        df[
+                            ~df["outcome"].isin(["V", "P"])
+                        ].copy()
+                        if not df.empty
+                        else pd.DataFrame(columns=ALL_COLUMNS)
+                    )
+                    selected_pending = apply_generated_strategy_name(
+                        pending_now,
+                        strategy_name,
+                    )
+
+                    with st.expander(
+                        f"⏳ Partite attuali compatibili ({len(selected_pending)})",
+                        expanded=False,
+                    ):
+                        if selected_pending.empty:
+                            st.info(
+                                "Nessuna partita in attesa rispetta questa strategia."
+                            )
+                        else:
+                            upcoming = selected_pending.copy()
+                            upcoming["Quota"] = pd.to_numeric(
+                                upcoming["current_odds"],
+                                errors="coerce",
+                            ).round(2)
+                            upcoming = upcoming[[
+                                "date",
+                                "time",
+                                "league",
+                                "match_name",
+                                "Quota",
+                            ]].rename(columns={
+                                "date": "Data",
+                                "time": "Ora",
+                                "league": "Campionato",
+                                "match_name": "Partita",
+                            })
+                            st.dataframe(
+                                upcoming.sort_values(
+                                    ["Data", "Ora"],
+                                    ascending=[False, False],
+                                    na_position="last",
+                                ),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+            with st.expander(
+                "🔬 Analisi avanzate e verifiche tecniche",
+                expanded=False,
+            ):
+                st.caption(
+                    "Queste tabelle servono al controllo del motore, non alla "
+                    "decisione quotidiana. I loro calcoli restano attivi."
+                )
+                st.write(
+                    f"Snapshot storici disponibili: {snapshot_count}"
+                )
+
+                if not definitive.empty:
+                    st.markdown("#### Classifica definitiva completa")
+                    definitive_display = add_human_strategy_column(
+                        definitive
+                    )
+                    st.dataframe(
+                        definitive_display.head(20),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                strong_watch = build_strong_watchlist(
+                    ranking,
+                    history_table,
+                    snapshot_count,
+                    selections,
+                    closed,
+                    elite_table,
+                )
+                st.markdown("#### Strategie in osservazione")
+                if strong_watch.empty:
+                    st.info(
+                        "Nessuna strategia abbastanza consolidata da mostrare."
+                    )
+                else:
+                    st.dataframe(
+                        add_human_strategy_column(strong_watch),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                st.markdown("#### Analisi range quote")
+                if odds_table.empty:
+                    st.info("Nessun dato disponibile per i range quota.")
+                else:
+                    st.dataframe(
+                        odds_table,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                st.markdown("#### Classifica completa del motore")
                 st.dataframe(
-                    upcoming.sort_values(
-                        ["Data", "Ora"],
-                        ascending=[False, False],
-                        na_position="last",
+                    ranking.drop(
+                        columns=["ID"],
+                        errors="ignore",
                     ),
                     use_container_width=True,
                     hide_index=True,
                 )
-
-            st.markdown("### ⚖️ Confronta fino a 3 strategie")
-            comparison_options = list(strategy_map.keys())
-            chosen = st.multiselect(
-                "Seleziona strategie",
-                comparison_options,
-                max_selections=3,
-                key="strategy_compare_v2",
-            )
-
-            if chosen:
-                compare_rows = []
-                for label in chosen:
-                    compared_strategy = strategy_map[label]
-                    sdf = apply_generated_strategy_name(
-                        closed,
-                        compared_strategy["name"],
-                    )
-                    ss = strategy_statistics(sdf)
-                    compare_rows.append({
-                        "Strategia": label.split(" | ")[0],
-                        "Partite": ss["closed"],
-                        "Vinte": ss["wins"],
-                        "Perse": ss["losses"],
-                        "Win rate %": round(ss["win_rate"], 2),
-                        "Puntato €": round(ss["staked"], 2),
-                        "Profitto €": round(ss["profit"], 2),
-                        "ROI %": round(ss["roi"], 2),
-                        "Profitto / 100€": round(
-                            (ss["profit"] / ss["staked"] * 100)
-                            if ss["staked"] else 0,
-                            2,
-                        ),
-                        "Quota media": round(ss["avg_odds"], 2),
-                        "Max perdite consecutive": ss["max_losing_streak"],
-                    })
-
-                st.dataframe(
-                    pd.DataFrame(compare_rows),
-                    use_container_width=True,
-                    hide_index=True,
-                )
+                st.caption(follow_message)
 
         elif ranking is not None:
             st.info(
