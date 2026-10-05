@@ -2204,38 +2204,59 @@ def _strategy_row_by_name(definitive, strategy_name):
     return None if rows.empty else rows.iloc[0]
 
 
-def _eligible_initial_official(row):
+def elite_required_matches(total_closed):
+    """
+    Campione minimo dinamico per l'Elite:
+    20% delle partite concluse, mai meno di 100 e mai più di 150.
+    """
+    try:
+        total = max(0, int(total_closed or 0))
+    except (TypeError, ValueError):
+        total = 0
+    return min(150, max(100, int(math.ceil(total * 0.20))))
+
+
+def _eligible_initial_official(row, min_matches=100):
     if row is None:
         return False
+    required = max(100, int(min_matches or 100))
     return (
-        int(row.get("Partite", 0) or 0) >= 100
+        int(row.get("Partite", 0) or 0) >= required
         and int(row.get("Rilevazioni", 0) or 0) >= 10
         and "✅" in str(row.get("Validata", ""))
         and float(row.get("Stabilità %", 0) or 0) >= 66.7
     )
 
 
-def _eligible_challenger(row):
+def _eligible_challenger(row, min_matches=100):
     if row is None:
         return False
+    required = max(100, int(min_matches or 100))
     return (
-        int(row.get("Partite", 0) or 0) >= 80
+        int(row.get("Partite", 0) or 0) >= required
         and int(row.get("Rilevazioni", 0) or 0) >= 5
         and "✅" in str(row.get("Validata", ""))
         and float(row.get("Stabilità %", 0) or 0) >= 66.7
     )
 
 
-def update_strategy_follow_state(definitive):
+def update_strategy_follow_state(definitive, min_matches=100):
     if definitive is None or definitive.empty:
         return None, "Nessuna strategia disponibile."
 
     latest_snapshot = latest_real_strategy_snapshot_id()
     state = load_strategy_follow_state()
+    required_matches = max(100, int(min_matches or 100))
 
     if not state:
         eligible = definitive[
-            definitive.apply(_eligible_initial_official, axis=1)
+            definitive.apply(
+                lambda row: _eligible_initial_official(
+                    row,
+                    required_matches,
+                ),
+                axis=1,
+            )
         ]
         first = eligible.iloc[0] if not eligible.empty else definitive.iloc[0]
         state = {
@@ -2245,7 +2266,11 @@ def update_strategy_follow_state(definitive):
             "official_roi": float(first.get("ROI %", 0) or 0),
             "official_profit": float(first.get("Profitto €", 0) or 0),
             "official_status": str(first.get("Stato", "")),
-            "official_consolidated": _eligible_initial_official(first),
+            "official_consolidated": _eligible_initial_official(
+                first,
+                required_matches,
+            ),
+            "required_matches": required_matches,
             "challenger": "",
             "challenger_streak": 0,
             "last_processed_snapshot": latest_snapshot,
@@ -2261,11 +2286,7 @@ def update_strategy_follow_state(definitive):
 
     official_name = str(state.get("official") or "")
     official_row = _strategy_row_by_name(definitive, official_name)
-
-    if latest_snapshot and latest_snapshot == str(
-        state.get("last_processed_snapshot") or ""
-    ):
-        return state, "Nessun nuovo snapshot: stato invariato."
+    state["required_matches"] = required_matches
 
     if official_row is not None:
         state["official_score"] = float(
@@ -2275,8 +2296,16 @@ def update_strategy_follow_state(definitive):
         state["official_roi"] = float(official_row.get("ROI %", 0) or 0)
         state["official_profit"] = float(official_row.get("Profitto €", 0) or 0)
         state["official_status"] = str(official_row.get("Stato", ""))
-        if _eligible_initial_official(official_row):
-            state["official_consolidated"] = True
+        state["official_consolidated"] = _eligible_initial_official(
+            official_row,
+            required_matches,
+        )
+
+    if latest_snapshot and latest_snapshot == str(
+        state.get("last_processed_snapshot") or ""
+    ):
+        save_strategy_follow_state(state)
+        return state, "Nessun nuovo snapshot: stato invariato."
 
     official_score = float(state.get("official_score", 0) or 0)
 
@@ -2285,7 +2314,13 @@ def update_strategy_follow_state(definitive):
     ].copy()
     if not challengers.empty:
         challengers = challengers[
-            challengers.apply(_eligible_challenger, axis=1)
+            challengers.apply(
+                lambda row: _eligible_challenger(
+                    row,
+                    required_matches,
+                ),
+                axis=1,
+            )
         ]
 
     if not challengers.empty:
@@ -2334,7 +2369,11 @@ def update_strategy_follow_state(definitive):
         state["official_roi"] = float(best.get("ROI %", 0) or 0)
         state["official_profit"] = float(best.get("Profitto €", 0) or 0)
         state["official_status"] = str(best.get("Stato", ""))
-        state["official_consolidated"] = _eligible_initial_official(best)
+        state["official_consolidated"] = _eligible_initial_official(
+            best,
+            required_matches,
+        )
+        state["required_matches"] = required_matches
         state["challenger"] = ""
         state["challenger_streak"] = 0
         state["switch_count"] = int(state.get("switch_count", 0) or 0) + 1
@@ -2436,12 +2475,12 @@ def strategy_follow_display_row(definitive, state, closed=None):
 
 
 
-ELITE_MIN_MATCHES = 80
+ELITE_MIN_MATCHES = 100
 ELITE_MIN_OBSERVATIONS = 5
 ELITE_RECENT_WINDOW = 50
 ELITE_MAX_ROWS = 6
 
-WATCH_MIN_MATCHES = 70
+WATCH_MIN_MATCHES = 80
 WATCH_MIN_OBSERVATIONS = 5
 WATCH_MIN_STABILITY = 66.7
 WATCH_MAX_ROWS = 6
@@ -2658,8 +2697,10 @@ def build_elite_ranking(
         regex=False,
     )
 
+    required_matches = elite_required_matches(len(closed))
+
     eligible_mask = (
-        (elite["Partite"] >= ELITE_MIN_MATCHES)
+        (elite["Partite"] >= required_matches)
         & (elite["Rilevazioni"] >= ELITE_MIN_OBSERVATIONS)
         & validated_mask
         & (elite["Stabilità %"] >= 66.7)
@@ -3602,7 +3643,9 @@ elif page == "🎯 Partite da giocare":
 
         usable = (
             bool(official)
-            and official_stats["closed"] >= ELITE_MIN_MATCHES
+            and official_stats["closed"] >= elite_required_matches(
+                len(closed_now)
+            )
             and official_stats["profit"] > 0
             and official_stats["roi"] > 0
         )
@@ -4715,8 +4758,12 @@ elif page == "🧠 Trova metodo migliore":
                 snapshot_count,
                 selections,
             )
+            required_elite_matches = elite_required_matches(
+                len(closed)
+            )
             follow_state, follow_message = update_strategy_follow_state(
-                definitive
+                definitive,
+                min_matches=required_elite_matches,
             )
             official_row = strategy_follow_display_row(
                 definitive,
@@ -4751,7 +4798,7 @@ elif page == "🧠 Trova metodo migliore":
                 )
                 official_currently_usable = (
                     int(official_row.get("Partite", 0) or 0)
-                    >= ELITE_MIN_MATCHES
+                    >= required_elite_matches
                     and float(official_row.get("ROI %", 0) or 0) > 0
                     and float(official_row.get("Profitto €", 0) or 0) > 0
                 )
@@ -4864,6 +4911,11 @@ elif page == "🧠 Trova metodo migliore":
                     ],
                     use_container_width=True,
                     hide_index=True,
+                )
+                st.caption(
+                    f"Soglia Elite attuale: almeno "
+                    f"{required_elite_matches} partite concluse "
+                    f"su {len(closed)} totali (20%, minimo 100, massimo 150)."
                 )
 
                 decision_message = elite_decision_message(
