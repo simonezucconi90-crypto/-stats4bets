@@ -2528,6 +2528,8 @@ def recent_strategy_statistics(df, window=ELITE_RECENT_WINDOW):
             "recent_matches": 0,
             "recent_profit": 0.0,
             "recent_roi": 0.0,
+            "recent_avg_profit_per_bet": 0.0,
+            "recent_avg_profit_per_bet_pct": 0.0,
             "recent_win_rate": 0.0,
             "recent_max_losing_streak": 0,
         }
@@ -2544,6 +2546,8 @@ def recent_strategy_statistics(df, window=ELITE_RECENT_WINDOW):
             "recent_matches": 0,
             "recent_profit": 0.0,
             "recent_roi": 0.0,
+            "recent_avg_profit_per_bet": 0.0,
+            "recent_avg_profit_per_bet_pct": 0.0,
             "recent_win_rate": 0.0,
             "recent_max_losing_streak": 0,
         }
@@ -2554,6 +2558,8 @@ def recent_strategy_statistics(df, window=ELITE_RECENT_WINDOW):
         "recent_matches": s["closed"],
         "recent_profit": s["profit"],
         "recent_roi": s["roi"],
+        "recent_avg_profit_per_bet": s["avg_profit_per_bet"],
+        "recent_avg_profit_per_bet_pct": s["avg_profit_per_bet_pct"],
         "recent_win_rate": s["win_rate"],
         "recent_max_losing_streak": s["max_losing_streak"],
     }
@@ -2655,6 +2661,14 @@ def build_elite_ranking(
             "ROI ultime 50 %": round(rs["recent_roi"], 2),
             "Profitto ultime 50 €": round(
                 rs["recent_profit"],
+                2,
+            ),
+            "Utile medio ultime 50 €": round(
+                rs["recent_avg_profit_per_bet"],
+                2,
+            ),
+            "Rendimento medio ultime 50 %": round(
+                rs["recent_avg_profit_per_bet_pct"],
                 2,
             ),
             "Win rate ultime 50 %": round(
@@ -2947,6 +2961,8 @@ def build_elite_ranking(
         "Partite recenti",
         "ROI ultime 50 %",
         "Profitto ultime 50 €",
+        "Utile medio ultime 50 €",
+        "Rendimento medio ultime 50 %",
         "Win rate ultime 50 %",
         "Stabilità %",
         "Peggior ROI blocco %",
@@ -3013,6 +3029,8 @@ def build_strong_watchlist(ranking, history_table, snapshot_count, selections, c
             "Strategia": name,
             "ROI ultime 50 %": round(rs["recent_roi"], 2),
             "Profitto ultime 50 €": round(rs["recent_profit"], 2),
+            "Utile medio ultime 50 €": round(rs["recent_avg_profit_per_bet"], 2),
+            "Rendimento medio ultime 50 %": round(rs["recent_avg_profit_per_bet_pct"], 2),
             "Win rate ultime 50 %": round(rs["recent_win_rate"], 2),
         })
 
@@ -3044,6 +3062,7 @@ def build_strong_watchlist(ranking, history_table, snapshot_count, selections, c
         "Posizione","Strategia","Stato","Partite","Vinte","Perse","Win rate %",
         "Quota media","Profitto €","ROI %","Utile medio / giocata €",
         "Rendimento medio su puntata %","ROI ultime 50 %","Profitto ultime 50 €",
+        "Utile medio ultime 50 €","Rendimento medio ultime 50 %",
         "Win rate ultime 50 %","Stabilità %","Rilevazioni","Top 10 %","Validata",
         "Punteggio definitivo"
     ]
@@ -5002,6 +5021,8 @@ elif page == "🧠 Trova metodo migliore":
                     "Rendimento medio su puntata %",
                     "Stabilità %",
                     "ROI ultime 50 %",
+                    "Utile medio ultime 50 €",
+                    "Rendimento medio ultime 50 %",
                 ]
                 st.dataframe(
                     elite_display[
