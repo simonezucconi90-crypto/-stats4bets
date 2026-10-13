@@ -3148,7 +3148,7 @@ def add_allibramento_explanation_columns(df):
 
 
 
-def monthly_strategy_statistics(df):
+def monthly_strategy_statistics(df, today=None):
     if df is None or df.empty:
         return pd.DataFrame()
 
@@ -3157,17 +3157,27 @@ def monthly_strategy_statistics(df):
         return pd.DataFrame()
 
     work["_date_dt"] = pd.to_datetime(work["date"], errors="coerce")
-    work = work[work["_date_dt"].notna()].copy()
+    today = (
+        pd.Timestamp.now(tz="Europe/Rome").tz_localize(None).normalize()
+        if today is None else pd.Timestamp(today).normalize()
+    )
+    work = work[
+        work["_date_dt"].notna() & (work["_date_dt"] <= today)
+    ].copy()
     if work.empty:
         return pd.DataFrame()
 
     work["_month"] = work["_date_dt"].dt.to_period("M")
     rows = []
-    current_month = pd.Timestamp(datetime.today()).to_period("M")
+    current_month = today.to_period("M")
+    months = pd.period_range(work["_month"].min(), current_month, freq="M")
 
-    for month, mdf in work.groupby("_month", sort=True):
+    for month in months:
+        mdf = work[work["_month"] == month]
         s = strategy_statistics(mdf)
         month_start = month.to_timestamp()
+        days_observed = today.day if month == current_month else month.days_in_month
+        month_fraction = days_observed / month.days_in_month
         rows.append({
             "Mese": month_start.strftime("%m/%Y"),
             "_month_sort": month_start,
@@ -3179,6 +3189,10 @@ def monthly_strategy_statistics(df):
             "Quota media": round(s["avg_odds"], 2),
             "Puntato €": round(s["staked"], 2),
             "Profitto €": round(s["profit"], 2),
+            "Profitto mensile proporzionato €": round(s["profit"] / month_fraction, 2),
+            "Giorni considerati": days_observed,
+            "_month_fraction": month_fraction,
+            "_actual_profit": s["profit"],
             "ROI %": round(s["roi"], 2),
             "Utile medio / giocata €": round(s["avg_profit_per_bet"], 2),
             "Rendimento medio su puntata %": round(s["avg_profit_per_bet_pct"], 2),
@@ -3234,15 +3248,30 @@ def show_monthly_strategy_analysis(selected_df):
         st.info("Non riesco a suddividere le partite per mese.")
         return
 
+    equivalent_months = float(monthly["_month_fraction"].sum())
+    average_monthly_profit = float(monthly["_actual_profit"].sum()) / equivalent_months
+    st.metric(
+        "Guadagno medio mensile stimato",
+        f'€ {average_monthly_profit:.2f}',
+        help="Profitto effettivo totale diviso per i mesi trascorsi: ogni mese concluso vale 1; il mese corrente vale giorni trascorsi / giorni del mese. Sono inclusi i mesi senza giocate.",
+    )
+    st.caption(
+        "La media comprende i mesi dal primo mese con risultati fino a oggi, "
+        "inclusi quelli senza giocate. Il primo mese storico conta come mese intero. "
+        "Il mese in corso conta in proporzione ai giorni trascorsi, incluso oggi. "
+        "È una stima basata sul ritmo osservato, non un guadagno garantito."
+    )
+
     st.markdown("### 📅 Risultati mese per mese")
     st.dataframe(
-        monthly.drop(columns=["_month_sort"], errors="ignore"),
+        monthly.drop(columns=["_month_sort", "_month_fraction", "_actual_profit"], errors="ignore"),
         use_container_width=True,
         hide_index=True,
     )
     st.caption(
-        "🟡 In corso = il mese non è ancora terminato, quindi profitto e ROI "
-        "non sono confrontabili alla pari con un mese completo."
+        "Profitto € = risultato effettivo. Profitto mensile proporzionato € = "
+        "per il mese in corso, profitto / giorni trascorsi × giorni totali del mese; "
+        "per i mesi completi coincide con il profitto effettivo."
     )
 
     st.markdown("### 💰 Profitto per mese")
