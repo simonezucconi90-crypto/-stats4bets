@@ -552,21 +552,37 @@ def extract_file(uploaded):
 
 def summary(df):
     if df.empty:
-        return dict(total=0,closed=0,wins=0,losses=0,win_rate=0,staked=0,profit=0,roi=0,avg_odds=0)
+        return dict(
+            total=0, closed=0, wins=0, losses=0, win_rate=0,
+            staked=0, profit=0, roi=0, avg_odds=0, avg_stake=0,
+            avg_profit_per_bet=0, avg_profit_per_bet_pct=0,
+        )
     closed = df[df["outcome"].isin(["V","P"])].copy()
     staked = pd.to_numeric(closed["stake"], errors="coerce").fillna(0).sum()
     profit = pd.to_numeric(closed["profit"], errors="coerce").fillna(0).sum()
     wins = int((closed["outcome"]=="V").sum())
+    closed_count = len(closed)
+    avg_stake = float(staked / closed_count) if closed_count else 0.0
+    avg_profit_per_bet = (
+        float(profit / closed_count) if closed_count else 0.0
+    )
+    avg_profit_per_bet_pct = (
+        float(avg_profit_per_bet / avg_stake * 100)
+        if avg_stake else 0.0
+    )
     return {
         "total": len(df),
-        "closed": len(closed),
+        "closed": closed_count,
         "wins": wins,
         "losses": int((closed["outcome"]=="P").sum()),
-        "win_rate": wins/len(closed)*100 if len(closed) else 0,
+        "win_rate": wins/closed_count*100 if closed_count else 0,
         "staked": float(staked),
         "profit": float(profit),
         "roi": float(profit/staked*100) if staked else 0,
-        "avg_odds": float(pd.to_numeric(closed["played_odds"], errors="coerce").mean()) if len(closed) else 0,
+        "avg_odds": float(pd.to_numeric(closed["played_odds"], errors="coerce").mean()) if closed_count else 0,
+        "avg_stake": avg_stake,
+        "avg_profit_per_bet": avg_profit_per_bet,
+        "avg_profit_per_bet_pct": avg_profit_per_bet_pct,
     }
 
 
@@ -627,6 +643,8 @@ def combo_table(df, min_sample=3, max_filters=3):
                 "Quota media": round(s["avg_odds"], 2),
                 "Profitto €": round(s["profit"], 2),
                 "ROI %": round(s["roi"], 2),
+                "Utile medio / giocata €": round(s["avg_profit_per_bet"], 2),
+                "Rendimento medio su puntata %": round(s["avg_profit_per_bet_pct"], 2),
                 "Affidabilità %": round(reliability * 100, 1),
                 "Punteggio": round(score, 2),
             })
@@ -961,6 +979,8 @@ def odds_range_analysis(df):
             "Puntato €": round(s["staked"], 2),
             "Profitto €": round(s["profit"], 2),
             "ROI %": round(s["roi"], 2),
+            "Utile medio / giocata €": round(s["avg_profit_per_bet"], 2),
+            "Rendimento medio su puntata %": round(s["avg_profit_per_bet_pct"], 2),
             "Profitto / 100€": round(
                 (s["profit"] / s["staked"] * 100) if s["staked"] else 0,
                 2,
@@ -1367,6 +1387,12 @@ def automatic_strategy_search(
                 "Puntato €": round(total_stats["staked"], 2),
                 "Profitto €": round(total_stats["profit"], 2),
                 "ROI %": round(total_stats["roi"], 2),
+                "Utile medio / giocata €": round(
+                    total_stats["avg_profit_per_bet"], 2
+                ),
+                "Rendimento medio su puntata %": round(
+                    total_stats["avg_profit_per_bet_pct"], 2
+                ),
                 "ROI base %": round(baseline_roi, 2),
                 "Δ ROI vs base": round(roi_delta_vs_base, 2),
                 "Profitto / 100€": round(
@@ -2099,6 +2125,8 @@ def definitive_strategy_ranking(ranking, history_table, snapshot_count, selectio
         "Quota media",
         "Profitto €",
         "ROI %",
+        "Utile medio / giocata €",
+        "Rendimento medio su puntata %",
         "Validata",
         "Stabilità %",
         "Rilevazioni",
@@ -2468,6 +2496,14 @@ def strategy_follow_display_row(definitive, state, closed=None):
         )
         display["ROI %"] = round(
             live_stats["roi"],
+            2,
+        )
+        display["Utile medio / giocata €"] = round(
+            live_stats["avg_profit_per_bet"],
+            2,
+        )
+        display["Rendimento medio su puntata %"] = round(
+            live_stats["avg_profit_per_bet_pct"],
             2,
         )
 
@@ -2906,6 +2942,8 @@ def build_elite_ranking(
         "Quota media",
         "Profitto €",
         "ROI %",
+        "Utile medio / giocata €",
+        "Rendimento medio su puntata %",
         "Partite recenti",
         "ROI ultime 50 %",
         "Profitto ultime 50 €",
@@ -3004,7 +3042,8 @@ def build_strong_watchlist(ranking, history_table, snapshot_count, selections, c
 
     cols = [
         "Posizione","Strategia","Stato","Partite","Vinte","Perse","Win rate %",
-        "Quota media","Profitto €","ROI %","ROI ultime 50 %","Profitto ultime 50 €",
+        "Quota media","Profitto €","ROI %","Utile medio / giocata €",
+        "Rendimento medio su puntata %","ROI ultime 50 %","Profitto ultime 50 €",
         "Win rate ultime 50 %","Stabilità %","Rilevazioni","Top 10 %","Validata",
         "Punteggio definitivo"
     ]
@@ -3122,6 +3161,8 @@ def monthly_strategy_statistics(df):
             "Puntato €": round(s["staked"], 2),
             "Profitto €": round(s["profit"], 2),
             "ROI %": round(s["roi"], 2),
+            "Utile medio / giocata €": round(s["avg_profit_per_bet"], 2),
+            "Rendimento medio su puntata %": round(s["avg_profit_per_bet_pct"], 2),
             "Max perdite consecutive": s["max_losing_streak"],
         })
 
@@ -3156,6 +3197,18 @@ def show_monthly_strategy_analysis(selected_df):
     f.metric("Profitto", f'€ {total["profit"]:.2f}')
     g.metric("ROI", f'{total["roi"]:.2f}%')
     h.metric("Quota media", f'{total["avg_odds"]:.2f}')
+
+    i,j = st.columns(2)
+    i.metric(
+        "Utile medio per giocata",
+        f'€ {total["avg_profit_per_bet"]:.2f}',
+        help="Profitto totale diviso per il numero di partite concluse.",
+    )
+    j.metric(
+        "Rendimento medio sulla puntata",
+        f'{total["avg_profit_per_bet_pct"]:.2f}% su € {total["avg_stake"]:.2f}',
+        help="Utile medio per giocata in percentuale sulla puntata media.",
+    )
 
     monthly = monthly_strategy_statistics(closed_selected)
     if monthly.empty:
@@ -4084,6 +4137,18 @@ elif page == "🏠 Home":
     metrics[2].metric("💰 Profitto", f'€ {s["profit"]:.2f}')
     metrics[3].metric("📈 ROI", f'{s["roi"]:.2f}%')
 
+    avg_metrics = st.columns(2)
+    avg_metrics[0].metric(
+        "Utile medio per giocata",
+        f'€ {s["avg_profit_per_bet"]:.2f}',
+        help="Profitto totale diviso per il numero di partite concluse.",
+    )
+    avg_metrics[1].metric(
+        "Rendimento medio sulla puntata",
+        f'{s["avg_profit_per_bet_pct"]:.2f}% su € {s["avg_stake"]:.2f}',
+        help="Utile medio per giocata in percentuale sulla puntata media.",
+    )
+
     st.markdown("### Ultime partite")
     if df.empty:
         st.info("Nessuna partita salvata.")
@@ -4336,6 +4401,18 @@ elif page == "📊 Dashboard":
     row2[2].metric("📈 ROI", f'{s["roi"]:.2f}%')
     row2[3].metric("Quota media", f'{s["avg_odds"]:.2f}')
 
+    row3 = st.columns(2)
+    row3[0].metric(
+        "Utile medio per giocata",
+        f'€ {s["avg_profit_per_bet"]:.2f}',
+        help="Profitto totale diviso per il numero di partite concluse.",
+    )
+    row3[1].metric(
+        "Rendimento medio sulla puntata",
+        f'{s["avg_profit_per_bet_pct"]:.2f}% su € {s["avg_stake"]:.2f}',
+        help="Utile medio per giocata in percentuale sulla puntata media.",
+    )
+
     closed = (
         df[df["outcome"].isin(["V", "P"])].copy()
         if not df.empty
@@ -4423,7 +4500,9 @@ elif page == "🔎 Analisi filtri":
         st.dataframe(pd.DataFrame([{
             "Partite":s["total"],"Concluse":s["closed"],"Vinte":s["wins"],"Perse":s["losses"],
             "Win rate %":round(s["win_rate"],2),"Quota media":round(s["avg_odds"],2),
-            "Profitto €":round(s["profit"],2),"ROI %":round(s["roi"],2)
+            "Profitto €":round(s["profit"],2),"ROI %":round(s["roi"],2),
+            "Utile medio / giocata €":round(s["avg_profit_per_bet"],2),
+            "Rendimento medio su puntata %":round(s["avg_profit_per_bet_pct"],2)
         }]), hide_index=True, use_container_width=True)
         st.dataframe(
             sort_matches_newest_first(filtered),
@@ -4565,6 +4644,18 @@ elif page == "🧪 Laboratorio Strategie":
         f.metric("Profitto", f'€ {s["profit"]:.2f}')
         g.metric("ROI", f'{s["roi"]:.2f}%')
         h.metric("Quota media", f'{s["avg_odds"]:.2f}')
+
+        i, j = st.columns(2)
+        i.metric(
+            "Utile medio per giocata",
+            f'€ {s["avg_profit_per_bet"]:.2f}',
+            help="Profitto totale diviso per il numero di partite concluse.",
+        )
+        j.metric(
+            "Rendimento medio sulla puntata",
+            f'{s["avg_profit_per_bet_pct"]:.2f}% su € {s["avg_stake"]:.2f}',
+            help="Utile medio per giocata in percentuale sulla puntata media.",
+        )
 
         if filtered.empty:
             st.warning("Nessuna partita rispetta tutti i filtri selezionati.")
@@ -4849,6 +4940,15 @@ elif page == "🧠 Trova metodo migliore":
                     "ROI ultime 50",
                     f'{float(health.get("roi50", 0) or 0):.2f}%',
                 )
+                o5, o6 = st.columns(2)
+                o5.metric(
+                    "Utile medio per giocata",
+                    f'€ {float(official_row.get("Utile medio / giocata €", 0) or 0):.2f}',
+                )
+                o6.metric(
+                    "Rendimento medio sulla puntata",
+                    f'{float(official_row.get("Rendimento medio su puntata %", 0) or 0):.2f}%',
+                )
                 st.caption(
                     "La strategia ufficiale non viene sostituita automaticamente: "
                     "un'eventuale alternativa Elite deve prima superare tutte le "
@@ -4898,6 +4998,8 @@ elif page == "🧠 Trova metodo migliore":
                     "Partite",
                     "ROI %",
                     "Profitto €",
+                    "Utile medio / giocata €",
+                    "Rendimento medio su puntata %",
                     "Stabilità %",
                     "ROI ultime 50 %",
                 ]
@@ -4994,6 +5096,15 @@ elif page == "🧠 Trova metodo migliore":
                     m4.metric(
                         "Stabilità",
                         f'{float(selected_elite.get("Stabilità %", 0) or 0):.1f}%',
+                    )
+                    m5, m6 = st.columns(2)
+                    m5.metric(
+                        "Utile medio per giocata",
+                        f'€ {stats["avg_profit_per_bet"]:.2f}',
+                    )
+                    m6.metric(
+                        "Rendimento medio sulla puntata",
+                        f'{stats["avg_profit_per_bet_pct"]:.2f}% su € {stats["avg_stake"]:.2f}',
                     )
 
                     detail = selected_df.sort_values(
@@ -5237,3 +5348,4 @@ SUPABASE_KEY="..."
 """)
     if not use_supabase():
         st.warning("Su Streamlit Cloud il database SQLite locale può essere perso dopo riavvii o aggiornamenti. Configura Supabase prima di inserire dati importanti.")
+
