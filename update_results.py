@@ -69,7 +69,9 @@ TEAM_ALIASES = {
     "lillestrom sk": "lillestrom",
     "metalist 1925": "metalist 1925 kharkiv",
     "metalist 1925 kharkiv": "metalist 1925 kharkiv",
+    "kharkiv": "metalist 1925 kharkiv",
     "liviy bereh": "livyi bereh",
+    "livyi bereg": "livyi bereh",
     "livyi bereh": "livyi bereh",
     "arges pitesti": "arges",
     "fc arges pitesti": "arges",
@@ -675,10 +677,15 @@ def choose_fixture(db_match, fixtures):
         if total >= 0.86 and hs >= 0.82 and partial_margin_ok:
             return fixture, True, total, "recupero nome incompleto", details
         return fixture, False, total, "nome incompleto non sicuro", details
-    if total >= HIGH_CONFIDENCE and hs >= 0.68 and aas >= 0.58 and margin_ok:
-        return fixture, True, total, "alta confidenza", details
     alias_home = normalize_team_name(details["db_home"]) == normalize_team_name(details["api_home"])
     alias_away = normalize_team_name(details["db_away"]) == normalize_team_name(details["api_away"])
+
+    # Se entrambe le squadre coincidono esattamente dopo gli alias, una seconda
+    # rappresentazione dello stesso evento non deve bloccare il risultato.
+    if total >= 0.94 and alias_home and alias_away:
+        return fixture, True, total, "squadre esatte", details
+    if total >= HIGH_CONFIDENCE and hs >= 0.68 and aas >= 0.58 and margin_ok:
+        return fixture, True, total, "alta confidenza", details
     if (
         REVIEW_CONFIDENCE <= total < HIGH_CONFIDENCE
         and hs >= 0.62 and aas >= 0.55 and margin_ok
@@ -834,6 +841,52 @@ def main():
                     f"ERRORE SOFASCORE su {date_iso}: "
                     f"{sofascore_exc}"
                 )
+            # RapidAPI viene usata come integrazione mirata soltanto per le
+            # categorie delle partite ancora aperte, evitando decine di
+            # richieste inutili e coprendo campionati assenti dalle fonti free.
+            if rapidapi_key:
+                try:
+                    categories = fetch_sportapi_categories_by_date(
+                        date_iso, rapidapi_key
+                    )
+                    needed = [
+                        m for m in matches
+                        if str(m.get("date") or "")[:10] == date_iso
+                    ]
+                    selected = [
+                        cid for cid, name in categories
+                        if any(
+                            sportapi_category_match(
+                                m.get("league") or "", name
+                            )
+                            for m in needed
+                        )
+                    ]
+                    category_ids = list(dict.fromkeys(selected))[:20]
+                    rapid_fixtures = []
+                    for category_id in category_ids:
+                        try:
+                            rapid_fixtures.extend(
+                                fetch_sportapi_category_events(
+                                    date_iso, category_id, rapidapi_key
+                                )
+                            )
+                        except Exception as category_exc:
+                            print(
+                                f"  SPORTAPI categoria {category_id} "
+                                f"saltata: {category_exc}"
+                            )
+                    fixtures.extend(rapid_fixtures)
+                    print(
+                        f"SPORTAPI MIRATA {date_iso}: "
+                        f"{len(rapid_fixtures)} partite aggiuntive "
+                        f"({len(category_ids)} categorie consultate)."
+                    )
+                except Exception as rapid_exc:
+                    print(
+                        f"ERRORE SPORTAPI MIRATA su {date_iso}: "
+                        f"{rapid_exc}"
+                    )
             sportapi_cache[date_iso] = fixtures
         except Exception as espn_exc:
             print(f"ERRORE ESPN su {date_iso}: {espn_exc}")
