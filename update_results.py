@@ -88,6 +88,14 @@ TEAM_ALIASES = {
 def basic_normalize(value):
     value = unicodedata.normalize("NFKD", value or "")
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    # NFKD non converte alcuni caratteri europei molto comuni nei nomi
+    # delle squadre (es. Lillestrøm). Li traslitteriamo prima della regex.
+    value = value.translate(str.maketrans({
+        "ø": "o", "Ø": "O", "ł": "l", "Ł": "L",
+        "đ": "d", "Đ": "D", "ð": "d", "Ð": "D",
+        "þ": "th", "Þ": "Th", "æ": "ae", "Æ": "Ae",
+        "œ": "oe", "Œ": "Oe",
+    }))
     value = value.casefold()
     value = re.sub(r"\b(fc|cf|sc|ac|afc|fk|club|calcio|football|futbol|deportivo)\b", " ", value)
     value = re.sub(r"[^a-z0-9]+", " ", value)
@@ -345,6 +353,8 @@ def fetch_sofascore_by_date(date_iso):
                 headers=headers,
                 timeout=30,
             )
+            if response.status_code in {401, 403}:
+                response.raise_for_status()
             if response.status_code == 429:
                 wait_seconds = 8 * (attempt + 1)
                 print(
@@ -362,6 +372,9 @@ def fetch_sofascore_by_date(date_iso):
             ]
         except Exception as exc:
             last_error = exc
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            if status_code in {401, 403}:
+                break
             if attempt < 2:
                 time.sleep(4 * (attempt + 1))
     if last_error:
@@ -824,6 +837,50 @@ def main():
                 print(
                     f"ERRORE LIVESCORE su {date_iso}: "
                     f"{livescore_exc}"
+                )
+
+            # Le gare notturne sono spesso archiviate dalle fonti con la data
+            # locale del giorno precedente. Carichiamo anche quella giornata
+            # soltanto quando nel database esiste una gara prima delle 08:00.
+            needed_on_date = [
+                m for m in matches
+                if str(m.get("date") or "")[:10] == date_iso
+            ]
+            has_night_match = False
+            for needed_match in needed_on_date:
+                try:
+                    match_hour = int(
+                        str(needed_match.get("time") or "99:00").split(":", 1)[0]
+                    )
+                    has_night_match = has_night_match or match_hour < 8
+                except Exception:
+                    pass
+            if has_night_match:
+                previous_date = (
+                    datetime.strptime(date_iso, "%Y-%m-%d").date()
+                    - timedelta(days=1)
+                ).isoformat()
+                previous_fixtures = []
+                try:
+                    previous_fixtures.extend(fetch_espn_by_date(previous_date))
+                except Exception as previous_espn_exc:
+                    print(
+                        f"ERRORE ESPN data locale {previous_date}: "
+                        f"{previous_espn_exc}"
+                    )
+                try:
+                    previous_fixtures.extend(
+                        fetch_livescore_by_date(previous_date)
+                    )
+                except Exception as previous_livescore_exc:
+                    print(
+                        f"ERRORE LIVESCORE data locale {previous_date}: "
+                        f"{previous_livescore_exc}"
+                    )
+                fixtures.extend(previous_fixtures)
+                print(
+                    f"DATA LOCALE {previous_date}: "
+                    f"{len(previous_fixtures)} partite notturne aggiuntive."
                 )
 
             # SofaScore va consultato sempre: ESPN può rispondere correttamente
