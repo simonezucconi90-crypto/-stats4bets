@@ -62,6 +62,25 @@ TEAM_ALIASES = {
     "cambrian clydach": "cambrian united",
     "cambrian clydach vale": "cambrian united",
     "cambrian united": "cambrian united",
+    # Varianti usate dalle fonti risultati per campionati meno coperti.
+    "sparta prague": "sparta prague",
+    "sparta praha": "sparta prague",
+    "ac sparta prague": "sparta prague",
+    "lillestrom sk": "lillestrom",
+    "metalist 1925": "metalist 1925 kharkiv",
+    "metalist 1925 kharkiv": "metalist 1925 kharkiv",
+    "liviy bereh": "livyi bereh",
+    "livyi bereh": "livyi bereh",
+    "arges pitesti": "arges",
+    "fc arges pitesti": "arges",
+    "abo qir semad": "abu qir fertilizers",
+    "abu qir semad": "abu qir fertilizers",
+    "abu qir fertilizers": "abu qir fertilizers",
+    "al hilal riyadh": "al hilal",
+    "al hilal": "al hilal",
+    "universidad tecnica de cajamarca": "utc cajamarca",
+    "utc de cajamarca": "utc cajamarca",
+    "cienciano cusco": "cienciano",
 }
 
 def basic_normalize(value):
@@ -627,14 +646,32 @@ def choose_fixture(db_match, fixtures):
     if not candidates:
         return None, False, 0.0, "nessun candidato", {}
     total, details, fixture = candidates[0]
-    second = candidates[1][0] if len(candidates) > 1 else 0.0
+
+    # La stessa partita può arrivare da ESPN, LiveScore e SofaScore.
+    # Non deve essere considerata un "secondo candidato": altrimenti due copie
+    # identiche producono margine zero e fanno scartare un abbinamento corretto.
+    best_pair = (
+        normalize_team_name(details.get("api_home")),
+        normalize_team_name(details.get("api_away")),
+    )
+    second = 0.0
+    has_distinct_second = False
+    for other_total, other_details, _ in candidates[1:]:
+        other_pair = (
+            normalize_team_name(other_details.get("api_home")),
+            normalize_team_name(other_details.get("api_away")),
+        )
+        if other_pair != best_pair:
+            second = other_total
+            has_distinct_second = True
+            break
     margin = total - second
     hs, aas, ls = details["home_score"], details["away_score"], details["league_score"]
-    margin_ok = margin >= 0.05 or len(candidates) == 1
+    margin_ok = margin >= 0.05 or not has_distinct_second
     if details.get("incomplete_name"):
         # Una riga senza avversaria è recuperabile soltanto se la squadra
         # coincide fortemente con la squadra di casa e il candidato è univoco.
-        partial_margin_ok = margin >= 0.08 or len(candidates) == 1
+        partial_margin_ok = margin >= 0.08 or not has_distinct_second
         if total >= 0.86 and hs >= 0.82 and partial_margin_ok:
             return fixture, True, total, "recupero nome incompleto", details
         return fixture, False, total, "nome incompleto non sicuro", details
@@ -781,6 +818,22 @@ def main():
                     f"ERRORE LIVESCORE su {date_iso}: "
                     f"{livescore_exc}"
                 )
+
+            # SofaScore va consultato sempre: ESPN può rispondere correttamente
+            # ma non coprire singoli campionati. Prima veniva usato soltanto se
+            # ESPN falliva del tutto, lasciando molte partite senza risultato.
+            try:
+                sofascore_fixtures = fetch_sofascore_by_date(date_iso)
+                fixtures.extend(sofascore_fixtures)
+                print(
+                    f"SOFASCORE {date_iso}: {len(sofascore_fixtures)} "
+                    f"partite aggiuntive disponibili."
+                )
+            except Exception as sofascore_exc:
+                print(
+                    f"ERRORE SOFASCORE su {date_iso}: "
+                    f"{sofascore_exc}"
+                )
             sportapi_cache[date_iso] = fixtures
         except Exception as espn_exc:
             print(f"ERRORE ESPN su {date_iso}: {espn_exc}")
@@ -868,6 +921,12 @@ def main():
                 f'{details.get("api_away")} | confidenza={confidence:.3f}'
             )
         else:
+            if fixture:
+                print(
+                    f'  ↪ migliore candidata scartata: '
+                    f'{details.get("api_home")} - {details.get("api_away")} | '
+                    f'confidenza={confidence:.3f} | motivo={reason}'
+                )
             fixture = None
 
         if fixture is None and football_data_key:
