@@ -934,11 +934,22 @@ def max_losing_streak(df):
     return worst
 
 
+def max_matches_per_day(df):
+    """Massimo numero di partite della selezione presenti nella stessa data."""
+    if df is None or df.empty or "date" not in df.columns:
+        return 0
+
+    dates = pd.to_datetime(df["date"], errors="coerce").dt.normalize()
+    daily_counts = dates.dropna().value_counts()
+    return int(daily_counts.max()) if not daily_counts.empty else 0
+
+
 def strategy_statistics(df):
     s = summary(df)
     return {
         **s,
         "max_losing_streak": max_losing_streak(df),
+        "max_matches_per_day": max_matches_per_day(df),
     }
 
 
@@ -1379,6 +1390,7 @@ def automatic_strategy_search(
                 "ID": strategy_id,
                 "Strategia": " + ".join(labels),
                 "Partite": total_stats["closed"],
+                "Max partite in un giorno": total_stats["max_matches_per_day"],
                 "Attendibilità": trust_label,
                 "Vinte": total_stats["wins"],
                 "Perse": total_stats["losses"],
@@ -2119,6 +2131,7 @@ def definitive_strategy_ranking(ranking, history_table, snapshot_count, selectio
         "Stato",
         "Punteggio definitivo",
         "Partite",
+        "Max partite in un giorno",
         "Vinte",
         "Perse",
         "Win rate %",
@@ -3183,6 +3196,7 @@ def monthly_strategy_statistics(df, today=None):
             "_month_sort": month_start,
             "Stato mese": "🟡 In corso" if month == current_month else "✅ Completo",
             "Partite": s["closed"],
+            "Max partite in un giorno": s["max_matches_per_day"],
             "Vinte": s["wins"],
             "Perse": s["losses"],
             "Win rate %": round(s["win_rate"], 2),
@@ -3241,6 +3255,17 @@ def show_monthly_strategy_analysis(selected_df):
         "Rendimento medio sulla puntata",
         f'{total["avg_profit_per_bet_pct"]:.2f}% su € {total["avg_stake"]:.2f}',
         help="Utile medio per giocata in percentuale sulla puntata media.",
+    )
+
+    max_daily_matches = int(total["max_matches_per_day"])
+    st.metric(
+        "Massimo partite in un giorno",
+        max_daily_matches,
+        help=(
+            "È il massimo storico di partite della strategia presenti nella "
+            "stessa data. Con puntata fissa da €20, il budget corrispondente è "
+            f"€ {max_daily_matches * 20:.2f}."
+        ),
     )
 
     monthly = monthly_strategy_statistics(closed_selected)
@@ -4997,6 +5022,18 @@ elif page == "🧠 Trova metodo migliore":
                     "Rendimento medio sulla puntata",
                     f'{float(official_row.get("Rendimento medio su puntata %", 0) or 0):.2f}%',
                 )
+                official_max_daily = int(
+                    official_row.get("Max partite in un giorno", 0) or 0
+                )
+                o7, o8 = st.columns(2)
+                o7.metric(
+                    "Massimo partite in un giorno",
+                    official_max_daily,
+                )
+                o8.metric(
+                    "Budget storico con puntata €20",
+                    f"€ {official_max_daily * 20:.2f}",
+                )
                 st.caption(
                     "La strategia ufficiale non viene sostituita automaticamente: "
                     "un'eventuale alternativa Elite deve prima superare tutte le "
@@ -5044,6 +5081,7 @@ elif page == "🧠 Trova metodo migliore":
                     "Indicazione",
                     "Punteggio Elite",
                     "Partite",
+                    "Max partite in un giorno",
                     "ROI %",
                     "Profitto €",
                     "Utile medio / giocata €",
@@ -5155,6 +5193,16 @@ elif page == "🧠 Trova metodo migliore":
                     m6.metric(
                         "Rendimento medio sulla puntata",
                         f'{stats["avg_profit_per_bet_pct"]:.2f}% su € {stats["avg_stake"]:.2f}',
+                    )
+                    detail_max_daily = int(stats["max_matches_per_day"])
+                    m7, m8 = st.columns(2)
+                    m7.metric(
+                        "Massimo partite in un giorno",
+                        detail_max_daily,
+                    )
+                    m8.metric(
+                        "Budget storico con puntata €20",
+                        f"€ {detail_max_daily * 20:.2f}",
                     )
 
                     detail = selected_df.sort_values(
