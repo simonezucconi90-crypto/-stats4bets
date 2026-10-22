@@ -29,6 +29,8 @@ REQUEST_DELAY = 4.5
 THESPORTSDB_RETRIES = 4
 HIGH_CONFIDENCE = 0.72
 REVIEW_CONFIDENCE = 0.65
+HISTORICAL_RESCUE_DAYS = 7
+HISTORICAL_MIN_HOURS_AFTER_KICKOFF = 3
 
 TEAM_ALIASES = {
     "wolves": "wolverhampton wanderers",
@@ -83,6 +85,20 @@ TEAM_ALIASES = {
     "universidad tecnica de cajamarca": "utc cajamarca",
     "utc de cajamarca": "utc cajamarca",
     "cienciano cusco": "cienciano",
+    # Nomi abbreviati/differenti rilevati nelle fonti risultati.
+    "santa fe": "independiente santa fe",
+    "independiente santa fe": "independiente santa fe",
+    "ind santa fe": "independiente santa fe",
+    "jaguares": "jaguares de cordoba",
+    "jaguares de cordoba": "jaguares de cordoba",
+    "olympiacos f c": "olympiakos piraeus",
+    "olympiakos f c": "olympiakos piraeus",
+    "olimpia asuncion": "olimpia",
+    "club olimpia": "olimpia",
+    "cs 2 de mayo": "2 de mayo",
+    "club 2 de mayo": "2 de mayo",
+    "egnatia rrogozhine": "egnatia",
+    "kf egnatia": "egnatia",
 }
 
 def basic_normalize(value):
@@ -143,6 +159,52 @@ def useful_date(date_iso):
         return False
     today = datetime.now().date()
     return today - timedelta(days=LOOKBACK_DAYS) <= d <= today
+
+def match_should_be_finished(match):
+    """Evita di associare una gara futura a un precedente incontro omonimo."""
+    date_iso = str(match.get("date") or "")[:10]
+    time_text = str(match.get("time") or "23:59")[:5]
+    try:
+        kickoff = datetime.strptime(
+            f"{date_iso} {time_text}", "%Y-%m-%d %H:%M"
+        )
+    except Exception:
+        return False
+    return kickoff <= datetime.now() - timedelta(
+        hours=HISTORICAL_MIN_HOURS_AFTER_KICKOFF
+    )
+
+
+def fetch_historical_rescue(date_iso, cache):
+    """Cerca gare rinviate/spostate salvate con una data errata nel database."""
+    if date_iso in cache:
+        return cache[date_iso]
+
+    fixtures = []
+    try:
+        base_date = datetime.strptime(date_iso, "%Y-%m-%d").date()
+    except Exception:
+        cache[date_iso] = fixtures
+        return fixtures
+
+    for days_back in range(1, HISTORICAL_RESCUE_DAYS + 1):
+        search_date = (base_date - timedelta(days=days_back)).isoformat()
+        try:
+            fixtures.extend(fetch_espn_by_date(search_date))
+        except Exception as exc:
+            print(f"  storico ESPN {search_date} non disponibile: {exc}")
+        try:
+            fixtures.extend(fetch_livescore_by_date(search_date))
+        except Exception as exc:
+            print(f"  storico LiveScore {search_date} non disponibile: {exc}")
+
+    cache[date_iso] = fixtures
+    print(
+        f"  RICERCA STORICA {date_iso}: {len(fixtures)} eventi "
+        f"nei {HISTORICAL_RESCUE_DAYS} giorni precedenti."
+    )
+    return fixtures
+
 
 def to_int(value):
     try:
@@ -814,6 +876,7 @@ def main():
     dates = sorted({str(m.get("date") or "")[:10] for m in matches})
     sportapi_cache = {}
     football_data_cache = {}
+    historical_rescue_cache = {}
 
     for date_iso in dates:
         # ESPN e SofaScore restituiscono l'intera giornata con una
@@ -1038,6 +1101,37 @@ def main():
                     f'confidenza={confidence:.3f} | motivo={reason}'
                 )
             fixture = None
+
+        if fixture is None and match_should_be_finished(match):
+            historical = fetch_historical_rescue(
+                date_iso, historical_rescue_cache
+            )
+            old_fixture, old_safe, old_confidence, _, old_details = (
+                choose_fixture(match, historical)
+            )
+            if old_fixture and old_safe:
+                exact_home = (
+                    normalize_team_name(old_details.get("db_home"))
+                    == normalize_team_name(old_details.get("api_home"))
+                )
+                exact_away = (
+                    normalize_team_name(old_details.get("db_away"))
+                    == normalize_team_name(old_details.get("api_away"))
+                )
+                old_event_date = str(old_fixture.get("date") or "")[:10]
+                if (
+                    exact_home
+                    and exact_away
+                    and is_finished(old_event_date, old_fixture)
+                ):
+                    fixture = old_fixture
+                    print(
+                        f'  {old_fixture.get("source")} storica candidata: '
+                        f'{old_details.get("api_home")} - '
+                        f'{old_details.get("api_away")} | '
+                        f'data fonte={old_event_date} | '
+                        f'confidenza={old_confidence:.3f}'
+                    )
 
         if fixture is None and football_data_key:
             print("  ↪ SportAPI non basta. Provo Footballdata.io.")
