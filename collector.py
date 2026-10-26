@@ -277,21 +277,44 @@ def parse_detail(html, base):
     return record
 
 
-def next_internal_id(client):
-    response = client.table("matches").select("id").execute()
-    numbers = []
-    for row in response.data or []:
-        try:
-            numbers.append(int(str(row.get("id", ""))))
-        except ValueError:
-            pass
-    return f"{(max(numbers) if numbers else 0) + 1:04d}"
+def load_internal_ids(client):
+    """Legge tutti gli ID superando il limite Supabase di 1.000 righe."""
+    page_size = 1000
+    offset = 0
+    ids = set()
+
+    while True:
+        rows = (
+            client.table("matches")
+            .select("id")
+            .range(offset, offset + page_size - 1)
+            .execute()
+            .data
+            or []
+        )
+        for row in rows:
+            value = str(row.get("id") or "").strip()
+            if value:
+                ids.add(value)
+        if len(rows) < page_size:
+            break
+        offset += page_size
+
+    return ids
 
 
 def save_to_supabase(records):
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
     inserted = 0
     updated = 0
+    used_ids = load_internal_ids(client)
+    numeric_ids = []
+    for value in used_ids:
+        try:
+            numeric_ids.append(int(value))
+        except ValueError:
+            pass
+    next_number = (max(numeric_ids) if numeric_ids else 0) + 1
 
     for record in records:
         source_id = record["source_match_id"]
@@ -317,7 +340,11 @@ def save_to_supabase(records):
             updated += 1
             continue
 
-        payload["id"] = next_internal_id(client)
+        while f"{next_number:04d}" in used_ids:
+            next_number += 1
+        payload["id"] = f"{next_number:04d}"
+        used_ids.add(payload["id"])
+        next_number += 1
 
         frozen_odds = float(payload.get("current_odds") or 0)
         payload["current_odds"] = frozen_odds
