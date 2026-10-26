@@ -30,6 +30,7 @@ THESPORTSDB_RETRIES = 4
 HIGH_CONFIDENCE = 0.72
 REVIEW_CONFIDENCE = 0.65
 HISTORICAL_RESCUE_DAYS = 7
+RESCHEDULED_FORWARD_DAYS = 3
 HISTORICAL_MIN_HOURS_AFTER_KICKOFF = 3
 
 TEAM_ALIASES = {
@@ -99,6 +100,14 @@ TEAM_ALIASES = {
     "club 2 de mayo": "2 de mayo",
     "egnatia rrogozhine": "egnatia",
     "kf egnatia": "egnatia",
+    "olympique marseille": "marseille",
+    "olympique de marseille": "marseille",
+    "marseille": "marseille",
+    "le havre ac": "le havre",
+    "le havre": "le havre",
+    "olympique lyonnais": "lyon",
+    "olympique lyon": "lyon",
+    "lyon": "lyon",
 }
 
 def basic_normalize(value):
@@ -187,21 +196,32 @@ def fetch_historical_rescue(date_iso, cache):
         cache[date_iso] = fixtures
         return fixtures
 
-    for days_back in range(1, HISTORICAL_RESCUE_DAYS + 1):
-        search_date = (base_date - timedelta(days=days_back)).isoformat()
+    offsets = list(range(-HISTORICAL_RESCUE_DAYS, 0))
+    offsets.extend(range(1, RESCHEDULED_FORWARD_DAYS + 1))
+    today = datetime.now().date()
+    searched_dates = []
+
+    for day_offset in offsets:
+        candidate_date = base_date + timedelta(days=day_offset)
+        # Non interroghiamo date oltre oggi: verranno controllate
+        # automaticamente dalle esecuzioni successive.
+        if candidate_date > today:
+            continue
+        search_date = candidate_date.isoformat()
+        searched_dates.append(search_date)
         try:
             fixtures.extend(fetch_espn_by_date(search_date))
         except Exception as exc:
-            print(f"  storico ESPN {search_date} non disponibile: {exc}")
+            print(f"  recupero ESPN {search_date} non disponibile: {exc}")
         try:
             fixtures.extend(fetch_livescore_by_date(search_date))
         except Exception as exc:
-            print(f"  storico LiveScore {search_date} non disponibile: {exc}")
+            print(f"  recupero LiveScore {search_date} non disponibile: {exc}")
 
     cache[date_iso] = fixtures
     print(
-        f"  RICERCA STORICA {date_iso}: {len(fixtures)} eventi "
-        f"nei {HISTORICAL_RESCUE_DAYS} giorni precedenti."
+        f"  RICERCA DATE VICINE {date_iso}: {len(fixtures)} eventi "
+        f"su {len(searched_dates)} giornate controllate."
     )
     return fixtures
 
