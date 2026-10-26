@@ -351,7 +351,31 @@ def normalize_record(record):
 
 def get_matches():
     if use_supabase():
-        rows = supabase_client().table("matches").select("*").order("date").order("time").order("id").execute().data
+        # Supabase/PostgREST restituisce al massimo 1.000 righe per richiesta.
+        # Carichiamo tutte le pagine, altrimenti le partite più recenti spariscono
+        # dall'app quando il database supera tale limite.
+        client = supabase_client()
+        rows = []
+        page_size = 1000
+        offset = 0
+
+        while True:
+            page = (
+                client.table("matches")
+                .select("*")
+                .order("date")
+                .order("time")
+                .order("id")
+                .range(offset, offset + page_size - 1)
+                .execute()
+                .data
+                or []
+            )
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+            offset += page_size
+
         df = pd.DataFrame(rows)
         if df.empty:
             return pd.DataFrame(columns=ALL_COLUMNS)
