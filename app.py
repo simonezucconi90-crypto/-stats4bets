@@ -2180,6 +2180,13 @@ def definitive_strategy_ranking(ranking, history_table, snapshot_count, selectio
 
 
 SYSTEM_STATE_PREFIX = "__SYSTEM_STATE__"
+
+# Il 5 ottobre 2026 è stata introdotta la schermata decisionale stabile:
+# strategia ufficiale, conferme consecutive e indicazione operativa unica.
+# Gli stati precedenti appartengono alla fase sperimentale in cui la strategia
+# veniva cambiata spesso e non devono entrare nel profitto Elite storico.
+ELITE_STABLE_SYSTEM_START = pd.Timestamp("2026-10-05 17:44:23")
+
 CHALLENGER_REQUIRED_STREAK = 5
 CHALLENGER_MIN_SCORE_ADVANTAGE = 3.0
 
@@ -2429,6 +2436,22 @@ def simulate_dynamic_elite(df, stake=20.0, confirmed_only=False):
 
     if df is None or df.empty or timeline.empty:
         return timeline, empty, empty
+
+    # Taglia definitivamente la fase sperimentale. Se una strategia era già
+    # attiva al momento dell'introduzione della vista stabile, il suo periodo
+    # parte esattamente da questa data e mai da agosto/settembre.
+    timeline = timeline[
+        timeline["Al"] > ELITE_STABLE_SYSTEM_START
+    ].copy()
+    if timeline.empty:
+        return timeline, empty, empty
+    timeline["Dal"] = timeline["Dal"].where(
+        timeline["Dal"] >= ELITE_STABLE_SYSTEM_START,
+        ELITE_STABLE_SYSTEM_START,
+    )
+    timeline = timeline[
+        timeline["Al"] > timeline["Dal"]
+    ].reset_index(drop=True)
 
     closed = df[df["outcome"].isin(["V", "P"])].copy()
     if closed.empty:
@@ -5749,10 +5772,10 @@ elif page == "🧠 Trova metodo migliore":
 elif page == "💰 Profitto Elite storico":
     st.subheader("💰 Profitto storico della strategia Elite")
     st.caption(
-        "Simulazione senza retroattività: ogni partita usa soltanto la "
-        "strategia ufficiale che l'app consigliava prima del suo inizio. "
-        "Quando la strategia cambiava, il calcolo cambia dalla data del "
-        "nuovo consiglio in avanti."
+        "Il calcolo parte dal 5 ottobre 2026, quando è stata introdotta la "
+        "gestione stabile con strategia ufficiale e cambi solo dopo le "
+        "conferme. Agosto e settembre, appartenenti alla fase sperimentale, "
+        "sono sempre esclusi."
     )
 
     all_matches = get_matches()
@@ -5764,9 +5787,9 @@ elif page == "💰 Profitto Elite storico":
         key="elite_history_stake",
     )
     st.success(
-        "✅ Regola fissa: vengono conteggiate soltanto le partite successive "
-        "a un consiglio Elite consolidato e attivo. La fase iniziale in cui "
-        "le strategie cambiavano prima della conferma è esclusa."
+        "✅ Regola fissa: dal 05/10/2026 vengono conteggiate soltanto le "
+        "partite successive a un consiglio Elite consolidato e attivo. "
+        "Agosto e settembre non possono entrare nel calcolo."
     )
 
     timeline, elite_bets, period_summary = simulate_dynamic_elite(
