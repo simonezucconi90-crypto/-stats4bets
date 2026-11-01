@@ -2260,7 +2260,7 @@ def save_strategy_follow_state(state):
         return False
 
 
-def elite_follow_timeline():
+def elite_follow_timeline(df=None):
     """
     Ricostruisce la cronologia reale della strategia ufficiale consigliata.
 
@@ -2301,23 +2301,91 @@ def elite_follow_timeline():
             .tz_localize(None)
         )
 
-        # Prima di questa funzione l'indicazione operativa non veniva salvata.
-        # In quei periodi assumiamo attiva la strategia ufficiale, che è la
-        # simulazione richiesta "seguendola sempre".
+        consolidated = bool(
+            state.get("official_consolidated", False)
+        )
+        required_matches = int(
+            state.get("required_matches", 100) or 100
+        )
+        official_matches = int(
+            state.get("official_matches", 0) or 0
+        )
+        official_roi = float(
+            state.get("official_roi", 0) or 0
+        )
+        official_profit = float(
+            state.get("official_profit", 0) or 0
+        )
+
         operational_active = state.get("operational_active")
+        operational_label = str(
+            state.get("operational_label") or ""
+        )
+
+        # Per gli stati precedenti all'introduzione del salvataggio
+        # "da seguire / non da seguire", ricostruiamo l'indicazione usando
+        # soltanto le partite che erano già iniziate in quel momento.
         if operational_active is None:
-            operational_active = True
+            operational_active = (
+                consolidated
+                and official_matches >= required_matches
+                and official_roi > 0
+                and official_profit > 0
+            )
+
+            if operational_active and df is not None and not df.empty:
+                historical = df[
+                    df["outcome"].isin(["V", "P"])
+                ].copy()
+                historical_time = (
+                    historical["time"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+                historical_time = historical_time.where(
+                    historical_time.str.match(r"^\d{1,2}:\d{2}$"),
+                    "12:00",
+                )
+                historical["_historical_kickoff"] = pd.to_datetime(
+                    historical["date"].astype(str)
+                    + " "
+                    + historical_time,
+                    errors="coerce",
+                )
+                historical = historical[
+                    historical["_historical_kickoff"] < captured_local
+                ]
+                historical_selected = apply_generated_strategy_name(
+                    historical,
+                    official,
+                )
+                historical_health = official_operational_status(
+                    historical_selected
+                )
+                operational_active = not str(
+                    historical_health.get("status") or ""
+                ).startswith("🔴")
+                operational_label = str(
+                    historical_health.get("status")
+                    or "Strategia consolidata"
+                )
+
+            if not operational_label:
+                operational_label = (
+                    "Strategia consolidata"
+                    if operational_active
+                    else "Non ancora da seguire"
+                )
 
         states.append({
             "Dal": captured_local,
             "Strategia": official,
-            "Consolidata": bool(
-                state.get("official_consolidated", False)
-            ),
+            "Consolidata": consolidated,
             "Indicazione attiva": bool(operational_active),
-            "Indicazione": str(
-                state.get("operational_label")
-                or "Strategia ufficiale"
+            "Indicazione": (
+                operational_label
+                or "Strategia consolidata"
             ),
         })
 
@@ -2356,7 +2424,7 @@ def simulate_dynamic_elite(df, stake=20.0, confirmed_only=False):
     Simula le giocate effettuate seguendo la strategia ufficiale valida in
     ciascun periodo storico. Usa solo partite iniziate dopo il consiglio.
     """
-    timeline = elite_follow_timeline()
+    timeline = elite_follow_timeline(df)
     empty = pd.DataFrame()
 
     if df is None or df.empty or timeline.empty:
@@ -5695,20 +5763,16 @@ elif page == "💰 Profitto Elite storico":
         step=1.0,
         key="elite_history_stake",
     )
-    confirmed_only = st.checkbox(
-        "Considera soltanto i periodi in cui la strategia era già consolidata",
-        value=False,
-        key="elite_history_confirmed_only",
-        help=(
-            "Disattivato riproduce la richiesta 'seguire sempre la strategia "
-            "ufficiale'. Attivato esclude i periodi ancora in consolidamento."
-        ),
+    st.success(
+        "✅ Regola fissa: vengono conteggiate soltanto le partite successive "
+        "a un consiglio Elite consolidato e attivo. La fase iniziale in cui "
+        "le strategie cambiavano prima della conferma è esclusa."
     )
 
     timeline, elite_bets, period_summary = simulate_dynamic_elite(
         all_matches,
         stake=float(stake_simulation),
-        confirmed_only=confirmed_only,
+        confirmed_only=True,
     )
 
     if timeline.empty:
@@ -5717,13 +5781,26 @@ elif page == "💰 Profitto Elite storico":
             "Apri prima «Trova metodo migliore» per registrare il consiglio."
         )
     else:
-        first_advice = timeline["Dal"].min()
-        st.info(
-            "Copertura disponibile dal "
-            f"{first_advice.strftime('%d/%m/%Y alle %H:%M')}. "
-            "Le raccomandazioni precedenti al primo salvataggio non possono "
-            "essere ricostruite senza usare informazioni future."
+        eligible_timeline = timeline[
+            timeline["Consolidata"].fillna(False).astype(bool)
+            & timeline["Indicazione attiva"].fillna(False).astype(bool)
+        ]
+        first_advice = (
+            eligible_timeline["Dal"].min()
+            if not eligible_timeline.empty
+            else pd.NaT
         )
+        if pd.notna(first_advice):
+            st.info(
+                "Calcolo avviato dal primo consiglio Elite consolidato e "
+                f"attivo: {first_advice.strftime('%d/%m/%Y alle %H:%M')}. "
+                "Tutta la fase sperimentale precedente è esclusa."
+            )
+        else:
+            st.warning(
+                "Nello storico non risulta ancora un periodo contemporaneamente "
+                "consolidato e attivo."
+            )
 
         if elite_bets.empty:
             st.warning(
@@ -5882,11 +5959,10 @@ elif page == "💰 Profitto Elite storico":
                 )
 
         st.caption(
-            "Nota: prima di questo aggiornamento venivano salvati i cambi "
-            "della strategia ufficiale, ma non sempre l'etichetta operativa "
-            "«da seguire / non da seguire». Per quei periodi il calcolo assume "
-            "che la strategia ufficiale fosse attiva. Da ora anche quella "
-            "indicazione viene registrata."
+            "Il calcolo usa esclusivamente dati disponibili alla data di ogni "
+            "consiglio. Per i vecchi stati in cui l'etichetta operativa non era "
+            "ancora salvata, la ricostruisce usando soltanto risultati già "
+            "conclusi in quel momento; non usa informazioni future."
         )
 
 
