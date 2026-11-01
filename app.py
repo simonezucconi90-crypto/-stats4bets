@@ -2181,6 +2181,10 @@ def definitive_strategy_ranking(ranking, history_table, snapshot_count, selectio
 
 SYSTEM_STATE_PREFIX = "__SYSTEM_STATE__"
 
+# Dal commit del 20/08/2026 alle 22:52:07 l'ufficiale non cambia più
+# appena una nuova strategia arriva prima: servono 5 conferme consecutive.
+ELITE_CONFIRMATION_SYSTEM_START = pd.Timestamp("2026-08-20 22:52:07")
+
 CHALLENGER_REQUIRED_STREAK = 5
 CHALLENGER_MIN_SCORE_ADVANTAGE = 3.0
 
@@ -2430,6 +2434,22 @@ def simulate_dynamic_elite(df, stake=20.0, confirmed_only=False):
 
     if df is None or df.empty or timeline.empty:
         return timeline, empty, empty
+
+    # Considera esclusivamente la versione Elite stabile introdotta nel codice
+    # il 20/08/2026 alle 22:52:07: da qui in avanti un cambio richiede cinque
+    # conferme consecutive. Gli eventuali stati precedenti vengono esclusi.
+    timeline = timeline[
+        timeline["Al"] > ELITE_CONFIRMATION_SYSTEM_START
+    ].copy()
+    if timeline.empty:
+        return timeline, empty, empty
+    timeline["Dal"] = timeline["Dal"].where(
+        timeline["Dal"] >= ELITE_CONFIRMATION_SYSTEM_START,
+        ELITE_CONFIRMATION_SYSTEM_START,
+    )
+    timeline = timeline[
+        timeline["Al"] > timeline["Dal"]
+    ].reset_index(drop=True)
 
     closed = df[df["outcome"].isin(["V", "P"])].copy()
     if closed.empty:
@@ -5750,9 +5770,9 @@ elif page == "🧠 Trova metodo migliore":
 elif page == "💰 Profitto Elite storico":
     st.subheader("💰 Profitto storico della strategia Elite")
     st.caption(
-        "Il calcolo segue la cronologia realmente registrata: parte dal primo "
-        "consiglio Elite contemporaneamente consolidato e attivo, poi cambia "
-        "strategia soltanto nelle date in cui il consiglio ufficiale cambia."
+        "Il calcolo usa esclusivamente l'Elite stabile introdotta il "
+        "20 agosto 2026 alle 22:52: da quel momento la strategia ufficiale "
+        "cambia soltanto dopo 5 conferme consecutive."
     )
 
     all_matches = get_matches()
@@ -5764,8 +5784,9 @@ elif page == "💰 Profitto Elite storico":
         key="elite_history_stake",
     )
     st.success(
-        "✅ Nessuna data imposta manualmente: vengono conteggiate soltanto le "
-        "partite giocate dopo una raccomandazione Elite consolidata e attiva."
+        "✅ Agosto è incluso solo dal 20/08/2026 alle 22:52 in avanti. "
+        "Vengono conteggiate esclusivamente le partite successive a una "
+        "raccomandazione Elite consolidata e attiva."
     )
 
     timeline, elite_bets, period_summary = simulate_dynamic_elite(
