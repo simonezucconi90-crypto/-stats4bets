@@ -2260,6 +2260,257 @@ def save_strategy_follow_state(state):
         return False
 
 
+def elite_follow_timeline():
+    """
+    Ricostruisce la cronologia reale della strategia ufficiale consigliata.
+
+    Ogni cambio parte dal momento in cui lo stato è stato salvato: in questo
+    modo una strategia nuova non viene mai applicata retroattivamente.
+    """
+    columns = [
+        "Dal", "Al", "Strategia", "Consolidata",
+        "Indicazione attiva", "Indicazione",
+    ]
+    rows = fetch_all_strategy_history_rows()
+    states = []
+
+    for row in rows:
+        raw = str(row.get("strategy") or "")
+        if not raw.startswith(SYSTEM_STATE_PREFIX):
+            continue
+
+        try:
+            state = json.loads(raw[len(SYSTEM_STATE_PREFIX):])
+        except Exception:
+            continue
+
+        if not isinstance(state, dict):
+            continue
+
+        official = str(state.get("official") or "").strip()
+        captured = pd.to_datetime(
+            row.get("captured_at"),
+            errors="coerce",
+            utc=True,
+        )
+        if not official or pd.isna(captured):
+            continue
+
+        captured_local = (
+            captured.tz_convert("Europe/Rome")
+            .tz_localize(None)
+        )
+
+        # Prima di questa funzione l'indicazione operativa non veniva salvata.
+        # In quei periodi assumiamo attiva la strategia ufficiale, che è la
+        # simulazione richiesta "seguendola sempre".
+        operational_active = state.get("operational_active")
+        if operational_active is None:
+            operational_active = True
+
+        states.append({
+            "Dal": captured_local,
+            "Strategia": official,
+            "Consolidata": bool(
+                state.get("official_consolidated", False)
+            ),
+            "Indicazione attiva": bool(operational_active),
+            "Indicazione": str(
+                state.get("operational_label")
+                or "Strategia ufficiale"
+            ),
+        })
+
+    if not states:
+        return pd.DataFrame(columns=columns)
+
+    ordered = pd.DataFrame(states).sort_values("Dal").reset_index(drop=True)
+
+    # Eliminiamo i salvataggi ripetuti identici e conserviamo soltanto i veri
+    # cambi di strategia, consolidamento o indicazione operativa.
+    compact = []
+    last_key = None
+    for _, row in ordered.iterrows():
+        key = (
+            str(row["Strategia"]),
+            bool(row["Consolidata"]),
+            bool(row["Indicazione attiva"]),
+            str(row["Indicazione"]),
+        )
+        if key == last_key:
+            continue
+        compact.append(row.to_dict())
+        last_key = key
+
+    timeline = pd.DataFrame(compact)
+    timeline["Al"] = timeline["Dal"].shift(-1)
+    timeline.loc[timeline.index[-1], "Al"] = (
+        pd.Timestamp.now(tz="Europe/Rome").tz_localize(None)
+    )
+
+    return timeline[columns]
+
+
+def simulate_dynamic_elite(df, stake=20.0, confirmed_only=False):
+    """
+    Simula le giocate effettuate seguendo la strategia ufficiale valida in
+    ciascun periodo storico. Usa solo partite iniziate dopo il consiglio.
+    """
+    timeline = elite_follow_timeline()
+    empty = pd.DataFrame()
+
+    if df is None or df.empty or timeline.empty:
+        return timeline, empty, empty
+
+    closed = df[df["outcome"].isin(["V", "P"])].copy()
+    if closed.empty:
+        return timeline, empty, empty
+
+    safe_time = (
+        closed["time"].fillna("").astype(str).str.strip()
+        if "time" in closed.columns
+        else pd.Series("", index=closed.index)
+    )
+    safe_time = safe_time.where(
+        safe_time.str.match(r"^\d{1,2}:\d{2}$"),
+        "12:00",
+    )
+    closed["_elite_kickoff"] = pd.to_datetime(
+        closed["date"].astype(str) + " " + safe_time,
+        errors="coerce",
+    )
+    missing_kickoff = closed["_elite_kickoff"].isna()
+    closed.loc[missing_kickoff, "_elite_kickoff"] = pd.to_datetime(
+        closed.loc[missing_kickoff, "date"],
+        errors="coerce",
+    )
+
+    selected_parts = []
+    period_rows = []
+
+    for period_number, (_, period) in enumerate(
+        timeline.iterrows(),
+        start=1,
+    ):
+        allowed = bool(period["Indicazione attiva"])
+        if confirmed_only:
+            allowed = allowed and bool(period["Consolidata"])
+
+        base = closed[
+            (closed["_elite_kickoff"] >= period["Dal"])
+            & (closed["_elite_kickoff"] < period["Al"])
+        ].copy()
+
+        selected = (
+            apply_generated_strategy_name(
+                base,
+                str(period["Strategia"]),
+            )
+            if allowed
+            else base.iloc[0:0].copy()
+        )
+
+        if not selected.empty:
+            selected["_elite_period"] = period_number
+            selected["_elite_strategy"] = str(period["Strategia"])
+            selected["_elite_advice_from"] = period["Dal"]
+            selected["_elite_advice"] = str(period["Indicazione"])
+            selected_parts.append(selected)
+
+        period_rows.append({
+            "Periodo": period_number,
+            "Dal": period["Dal"],
+            "Al": period["Al"],
+            "Strategia": str(period["Strategia"]),
+            "Consolidata": bool(period["Consolidata"]),
+            "Indicazione": str(period["Indicazione"]),
+            "Giocate": int(len(selected)),
+        })
+
+    if not selected_parts:
+        return timeline, empty, pd.DataFrame(period_rows)
+
+    bets = pd.concat(selected_parts, ignore_index=False)
+    bets = bets.sort_values(
+        ["_elite_kickoff", "time", "id"]
+    ).copy()
+
+    played = pd.to_numeric(
+        bets.get("played_odds"),
+        errors="coerce",
+    )
+    current = pd.to_numeric(
+        bets.get("current_odds"),
+        errors="coerce",
+    )
+    odds = played.where(played > 1, current)
+
+    actual_stake = pd.to_numeric(
+        bets.get("stake"),
+        errors="coerce",
+    )
+    actual_profit = pd.to_numeric(
+        bets.get("profit"),
+        errors="coerce",
+    )
+
+    fallback_win_profit = (
+        actual_profit.div(actual_stake.where(actual_stake > 0))
+        * float(stake)
+    )
+    win_profit = (odds - 1.0) * float(stake)
+    win_profit = win_profit.where(odds > 1, fallback_win_profit)
+
+    bets["Puntata simulata €"] = float(stake)
+    bets["Profitto simulato €"] = np.where(
+        bets["outcome"].astype(str) == "V",
+        win_profit,
+        -float(stake),
+    )
+    bets["Profitto simulato €"] = pd.to_numeric(
+        bets["Profitto simulato €"],
+        errors="coerce",
+    ).fillna(0.0).round(2)
+    bets["Quota simulata"] = odds.round(2)
+
+    period_summary = pd.DataFrame(period_rows)
+    calculated = (
+        bets.groupby("_elite_period", as_index=False)
+        .agg(
+            Giocate_calcolate=("id", "count"),
+            Vinte=("outcome", lambda s: int((s == "V").sum())),
+            **{"Profitto €": ("Profitto simulato €", "sum")},
+        )
+        .rename(columns={"_elite_period": "Periodo"})
+    )
+    period_summary = period_summary.drop(
+        columns=["Giocate"], errors="ignore"
+    ).merge(calculated, on="Periodo", how="left")
+    period_summary["Giocate"] = pd.to_numeric(
+        period_summary.pop("Giocate_calcolate"),
+        errors="coerce",
+    ).fillna(0).astype(int)
+    period_summary["Vinte"] = pd.to_numeric(
+        period_summary["Vinte"],
+        errors="coerce",
+    ).fillna(0).astype(int)
+    period_summary["Profitto €"] = pd.to_numeric(
+        period_summary["Profitto €"],
+        errors="coerce",
+    ).fillna(0.0).round(2)
+    period_summary["Puntato €"] = (
+        period_summary["Giocate"] * float(stake)
+    ).round(2)
+    period_summary["ROI %"] = np.where(
+        period_summary["Puntato €"] > 0,
+        period_summary["Profitto €"]
+        / period_summary["Puntato €"] * 100.0,
+        0.0,
+    ).round(2)
+
+    return timeline, bets, period_summary
+
+
 def _strategy_row_by_name(definitive, strategy_name):
     if definitive is None or definitive.empty or not strategy_name:
         return None
@@ -3389,7 +3640,8 @@ page = st.sidebar.radio("Menu", [
     "🏠 Home","🎯 Partite da giocare","📅 Analisi mensile","⚡ Inserimento rapido",
     "➕ Nuova partita","📋 Database","🏆 Aggiorna risultato","✏️ Modifica/Elimina",
     "📊 Dashboard","🔎 Analisi filtri","🧪 Laboratorio Strategie",
-    "🧠 Trova metodo migliore","📥 Importa/Esporta","⚙️ Configurazione"
+    "🧠 Trova metodo migliore","💰 Profitto Elite storico",
+    "📥 Importa/Esporta","⚙️ Configurazione"
 ])
 
 if page == "⚡ Inserimento rapido":
@@ -5069,6 +5321,26 @@ elif page == "🧠 Trova metodo migliore":
                     "Non c'è ancora una strategia ufficiale consolidata da seguire."
                 )
 
+            # Da questo aggiornamento salviamo anche l'indicazione
+            # operativa. La simulazione storica potrà così rispettare non solo
+            # i cambi di strategia, ma anche eventuali periodi "non da seguire".
+            if isinstance(follow_state, dict):
+                operational_active = operational_label in {
+                    "✅ DA SEGUIRE",
+                    "⚠️ DA SEGUIRE CON CAUTELA",
+                }
+                state_needs_update = (
+                    follow_state.get("operational_label")
+                    != operational_label
+                    or follow_state.get("operational_active")
+                    is not operational_active
+                )
+                if state_needs_update:
+                    follow_state = dict(follow_state)
+                    follow_state["operational_label"] = operational_label
+                    follow_state["operational_active"] = operational_active
+                    save_strategy_follow_state(follow_state)
+
             st.markdown("### 🏆 Classifica Elite")
             st.caption(
                 "È l'unica classifica principale: contiene poche strategie mature "
@@ -5405,6 +5677,218 @@ elif page == "🧠 Trova metodo migliore":
                 "Nessuna strategia supera il campione minimo scelto. "
                 "Per testare il funzionamento puoi abbassarlo temporaneamente."
             )
+
+elif page == "💰 Profitto Elite storico":
+    st.subheader("💰 Profitto storico della strategia Elite")
+    st.caption(
+        "Simulazione senza retroattività: ogni partita usa soltanto la "
+        "strategia ufficiale che l'app consigliava prima del suo inizio. "
+        "Quando la strategia cambiava, il calcolo cambia dalla data del "
+        "nuovo consiglio in avanti."
+    )
+
+    all_matches = get_matches()
+    stake_simulation = st.number_input(
+        "Puntata simulata per partita (€)",
+        min_value=1.0,
+        value=20.0,
+        step=1.0,
+        key="elite_history_stake",
+    )
+    confirmed_only = st.checkbox(
+        "Considera soltanto i periodi in cui la strategia era già consolidata",
+        value=False,
+        key="elite_history_confirmed_only",
+        help=(
+            "Disattivato riproduce la richiesta 'seguire sempre la strategia "
+            "ufficiale'. Attivato esclude i periodi ancora in consolidamento."
+        ),
+    )
+
+    timeline, elite_bets, period_summary = simulate_dynamic_elite(
+        all_matches,
+        stake=float(stake_simulation),
+        confirmed_only=confirmed_only,
+    )
+
+    if timeline.empty:
+        st.info(
+            "Non risultano ancora stati storici della strategia ufficiale. "
+            "Apri prima «Trova metodo migliore» per registrare il consiglio."
+        )
+    else:
+        first_advice = timeline["Dal"].min()
+        st.info(
+            "Copertura disponibile dal "
+            f"{first_advice.strftime('%d/%m/%Y alle %H:%M')}. "
+            "Le raccomandazioni precedenti al primo salvataggio non possono "
+            "essere ricostruite senza usare informazioni future."
+        )
+
+        if elite_bets.empty:
+            st.warning(
+                "Nel periodo storico disponibile non risultano partite "
+                "concluse compatibili con i consigli Elite registrati."
+            )
+        else:
+            total_bets = int(len(elite_bets))
+            wins = int((elite_bets["outcome"] == "V").sum())
+            losses = int((elite_bets["outcome"] == "P").sum())
+            staked = total_bets * float(stake_simulation)
+            profit = float(
+                elite_bets["Profitto simulato €"].sum()
+            )
+            roi = profit / staked * 100.0 if staked else 0.0
+            win_rate = wins / total_bets * 100.0 if total_bets else 0.0
+            avg_profit = profit / total_bets if total_bets else 0.0
+
+            daily_counts = (
+                elite_bets["_elite_kickoff"]
+                .dt.normalize()
+                .value_counts()
+            )
+            max_daily = int(
+                daily_counts.max()
+                if not daily_counts.empty
+                else 0
+            )
+            strategy_switches = int(
+                (
+                    timeline["Strategia"].astype(str)
+                    != timeline["Strategia"].astype(str).shift()
+                ).sum() - 1
+            )
+            strategy_switches = max(0, strategy_switches)
+
+            a1, a2, a3, a4 = st.columns(4)
+            a1.metric("Giocate", total_bets)
+            a2.metric("Vinte / Perse", f"{wins} / {losses}")
+            a3.metric("Puntato", f"€ {staked:.2f}")
+            a4.metric("Profitto Elite", f"€ {profit:.2f}")
+
+            b1, b2, b3, b4 = st.columns(4)
+            b1.metric("ROI", f"{roi:.2f}%")
+            b2.metric("Win rate", f"{win_rate:.2f}%")
+            b3.metric("Utile medio / giocata", f"€ {avg_profit:.2f}")
+            b4.metric("Cambi strategia", strategy_switches)
+
+            c1, c2 = st.columns(2)
+            c1.metric(
+                "Massimo partite in un giorno",
+                max_daily,
+            )
+            c2.metric(
+                "Budget massimo storico",
+                f"€ {max_daily * float(stake_simulation):.2f}",
+            )
+
+            curve = elite_bets.copy().reset_index(drop=True)
+            curve["Progressivo"] = range(1, len(curve) + 1)
+            curve["Profitto cumulato €"] = (
+                curve["Profitto simulato €"].cumsum()
+            )
+            st.markdown("### 📈 Andamento del profitto Elite")
+            st.line_chart(
+                curve.set_index("Progressivo")[
+                    "Profitto cumulato €"
+                ]
+            )
+
+            st.markdown("### 📆 Risultato per mese")
+            monthly = curve.copy()
+            monthly["Mese"] = (
+                monthly["_elite_kickoff"]
+                .dt.to_period("M")
+                .astype(str)
+            )
+            monthly_table = (
+                monthly.groupby("Mese", as_index=False)
+                .agg(
+                    Giocate=("id", "count"),
+                    Vinte=("outcome", lambda s: int((s == "V").sum())),
+                    **{"Profitto €": ("Profitto simulato €", "sum")},
+                )
+            )
+            monthly_table["Puntato €"] = (
+                monthly_table["Giocate"] * float(stake_simulation)
+            )
+            monthly_table["ROI %"] = np.where(
+                monthly_table["Puntato €"] > 0,
+                monthly_table["Profitto €"]
+                / monthly_table["Puntato €"] * 100.0,
+                0.0,
+            )
+            for numeric_column in ["Profitto €", "Puntato €", "ROI %"]:
+                monthly_table[numeric_column] = pd.to_numeric(
+                    monthly_table[numeric_column],
+                    errors="coerce",
+                ).fillna(0).round(2)
+            st.dataframe(
+                monthly_table.sort_values("Mese", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.markdown("### 🔄 Periodi e cambi della strategia")
+            periods_display = period_summary.copy()
+            periods_display["Dal"] = pd.to_datetime(
+                periods_display["Dal"],
+                errors="coerce",
+            ).dt.strftime("%d/%m/%Y %H:%M")
+            periods_display["Al"] = pd.to_datetime(
+                periods_display["Al"],
+                errors="coerce",
+            ).dt.strftime("%d/%m/%Y %H:%M")
+            periods_display["Strategia"] = periods_display[
+                "Strategia"
+            ].map(human_strategy_name)
+            periods_display["Consolidata"] = periods_display[
+                "Consolidata"
+            ].map({True: "Sì", False: "No"})
+            st.dataframe(
+                periods_display[[
+                    "Dal", "Al", "Strategia", "Consolidata",
+                    "Indicazione", "Giocate", "Vinte",
+                    "Puntato €", "Profitto €", "ROI %",
+                ]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            with st.expander(
+                "📋 Tutte le partite della simulazione",
+                expanded=False,
+            ):
+                details = elite_bets.copy()
+                details["Data"] = details[
+                    "_elite_kickoff"
+                ].dt.strftime("%d/%m/%Y %H:%M")
+                details["Strategia Elite"] = details[
+                    "_elite_strategy"
+                ].map(human_strategy_name)
+                details["Esito"] = details["outcome"].map({
+                    "V": "🟢 V",
+                    "P": "🔴 P",
+                })
+                details["Partita"] = details["match_name"]
+                st.dataframe(
+                    details[[
+                        "Data", "Partita", "Strategia Elite",
+                        "Quota simulata", "Esito",
+                        "Puntata simulata €", "Profitto simulato €",
+                    ]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        st.caption(
+            "Nota: prima di questo aggiornamento venivano salvati i cambi "
+            "della strategia ufficiale, ma non sempre l'etichetta operativa "
+            "«da seguire / non da seguire». Per quei periodi il calcolo assume "
+            "che la strategia ufficiale fosse attiva. Da ora anche quella "
+            "indicazione viene registrata."
+        )
+
 
 elif page == "📥 Importa/Esporta":
     st.subheader("📥 Importa / Esporta")
