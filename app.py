@@ -2185,8 +2185,12 @@ SYSTEM_STATE_PREFIX = "__SYSTEM_STATE__"
 # appena una nuova strategia arriva prima: servono 5 conferme consecutive.
 ELITE_CONFIRMATION_SYSTEM_START = pd.Timestamp("2026-08-20 22:52:07")
 
-CHALLENGER_REQUIRED_STREAK = 5
-CHALLENGER_MIN_SCORE_ADVANTAGE = 3.0
+ELITE_SWITCH_POLICY_VERSION = "elite_switch_v2"
+CHALLENGER_REQUIRED_STREAK = 8
+CHALLENGER_MIN_SCORE_ADVANTAGE = 5.0
+CHALLENGER_GREEN_SCORE_ADVANTAGE = 7.0
+CHALLENGER_MIN_NEW_MATCHES = 10
+CHALLENGER_GREEN_MIN_NEW_MATCHES = 15
 
 
 def latest_real_strategy_snapshot_id():
@@ -2587,13 +2591,26 @@ def _eligible_challenger(row, min_matches=100):
     required = max(100, int(min_matches or 100))
     return (
         int(row.get("Partite", 0) or 0) >= required
-        and int(row.get("Rilevazioni", 0) or 0) >= 5
+        and int(row.get("Rilevazioni", 0) or 0) >= 10
         and "✅" in str(row.get("Validata", ""))
         and float(row.get("Stabilità %", 0) or 0) >= 66.7
     )
 
 
-def update_strategy_follow_state(definitive, min_matches=100):
+def update_strategy_follow_state(
+    definitive,
+    min_matches=100,
+    closed=None,
+):
+    """
+    Mantiene una sola Elite ufficiale e autorizza un cambio soltanto con
+    evidenza nuova e indipendente.
+
+    Una nuova pressione del pulsante con la stessa classifica non crea uno
+    snapshot e quindi non conta. Anche con snapshot differenti, lo sfidante
+    deve aggiungere nuove partite proprie concluse prima di poter sostituire
+    l'ufficiale.
+    """
     if definitive is None or definitive.empty:
         return None, "Nessuna strategia disponibile."
 
@@ -2626,8 +2643,11 @@ def update_strategy_follow_state(definitive, min_matches=100):
             "required_matches": required_matches,
             "challenger": "",
             "challenger_streak": 0,
+            "challenger_start_matches": 0,
+            "challenger_new_matches": 0,
             "last_processed_snapshot": latest_snapshot,
             "switch_count": 0,
+            "switch_policy_version": ELITE_SWITCH_POLICY_VERSION,
         }
         save_strategy_follow_state(state)
         msg = (
@@ -2645,23 +2665,81 @@ def update_strategy_follow_state(definitive, min_matches=100):
         state["official_score"] = float(
             official_row.get("Punteggio definitivo", 0) or 0
         )
-        state["official_matches"] = int(official_row.get("Partite", 0) or 0)
-        state["official_roi"] = float(official_row.get("ROI %", 0) or 0)
-        state["official_profit"] = float(official_row.get("Profitto €", 0) or 0)
-        state["official_status"] = str(official_row.get("Stato", ""))
+        state["official_matches"] = int(
+            official_row.get("Partite", 0) or 0
+        )
+        state["official_roi"] = float(
+            official_row.get("ROI %", 0) or 0
+        )
+        state["official_profit"] = float(
+            official_row.get("Profitto €", 0) or 0
+        )
+        state["official_status"] = str(
+            official_row.get("Stato", "")
+        )
         state["official_consolidated"] = _eligible_initial_official(
             official_row,
             required_matches,
         )
 
+    # Migrazione sicura: conserviamo l'Elite attuale ma azzeriamo le vecchie
+    # conferme, perché erano state raccolte con la regola precedente.
+    if str(state.get("switch_policy_version") or "") != (
+        ELITE_SWITCH_POLICY_VERSION
+    ):
+        state["switch_policy_version"] = ELITE_SWITCH_POLICY_VERSION
+        state["challenger"] = ""
+        state["challenger_streak"] = 0
+        state["challenger_start_matches"] = 0
+        state["challenger_new_matches"] = 0
+        state["last_processed_snapshot"] = latest_snapshot
+        save_strategy_follow_state(state)
+        return (
+            state,
+            "Regola Elite aggiornata: ufficiale invariata e osservazione "
+            "degli sfidanti ripartita da zero.",
+        )
+
+    # Lo stesso snapshot non può mai contare due volte, anche premendo
+    # ripetutamente il pulsante senza nuove informazioni.
     if latest_snapshot and latest_snapshot == str(
         state.get("last_processed_snapshot") or ""
     ):
         save_strategy_follow_state(state)
-        return state, "Nessun nuovo snapshot: stato invariato."
+        return state, "Nessun dato nuovo: stato Elite invariato."
+
+    official_health = {
+        "status": "⚪ DATI INSUFFICIENTI",
+        "roi50": 0.0,
+    }
+    if (
+        closed is not None
+        and not closed.empty
+        and official_name
+    ):
+        official_selected = apply_generated_strategy_name(
+            closed,
+            official_name,
+        )
+        official_health = official_operational_status(
+            official_selected
+        )
+
+    official_is_green = str(
+        official_health.get("status") or ""
+    ).startswith("🟢")
+    required_advantage = (
+        CHALLENGER_GREEN_SCORE_ADVANTAGE
+        if official_is_green
+        else CHALLENGER_MIN_SCORE_ADVANTAGE
+    )
+    required_new_matches = (
+        CHALLENGER_GREEN_MIN_NEW_MATCHES
+        if official_is_green
+        else CHALLENGER_MIN_NEW_MATCHES
+    )
 
     official_score = float(state.get("official_score", 0) or 0)
-
     challengers = definitive[
         definitive["Strategia"].astype(str) != official_name
     ].copy()
@@ -2675,32 +2753,66 @@ def update_strategy_follow_state(definitive, min_matches=100):
                 axis=1,
             )
         ]
-
     if not challengers.empty:
         challengers = challengers[
             pd.to_numeric(
-                challengers["Punteggio definitivo"], errors="coerce"
+                challengers["Punteggio definitivo"],
+                errors="coerce",
             ).fillna(0)
-            >= official_score + CHALLENGER_MIN_SCORE_ADVANTAGE
+            >= official_score + required_advantage
         ]
 
-    if challengers.empty:
+    def reset_challenger():
         state["challenger"] = ""
         state["challenger_streak"] = 0
+        state["challenger_start_matches"] = 0
+        state["challenger_new_matches"] = 0
         state["last_processed_snapshot"] = latest_snapshot
+
+    if challengers.empty:
+        reset_challenger()
         save_strategy_follow_state(state)
         return (
             state,
-            "Nessuno sfidante supera abbastanza la strategia ufficiale: "
-            "continua con quella attuale.",
+            "Nessuno sfidante ha prove sufficienti: continua con "
+            "l'Elite attuale.",
         )
 
     best = challengers.sort_values(
         ["Punteggio definitivo", "Rilevazioni", "Partite"],
         ascending=[False, False, False],
     ).iloc[0]
-
     challenger_name = str(best["Strategia"])
+    challenger_matches = int(best.get("Partite", 0) or 0)
+
+    challenger_health = {
+        "status": "⚪ DATI INSUFFICIENTI",
+        "roi50": 0.0,
+    }
+    if closed is not None and not closed.empty:
+        challenger_selected = apply_generated_strategy_name(
+            closed,
+            challenger_name,
+        )
+        challenger_health = official_operational_status(
+            challenger_selected
+        )
+
+    # Uno sfidante in perdita recente non può accumulare conferme.
+    challenger_roi50 = float(
+        challenger_health.get("roi50", 0) or 0
+    )
+    challenger_is_red = str(
+        challenger_health.get("status") or ""
+    ).startswith("🔴")
+    if challenger_roi50 <= 0.0 or challenger_is_red:
+        reset_challenger()
+        save_strategy_follow_state(state)
+        return (
+            state,
+            "Lo sfidante migliore non conferma risultati recenti positivi: "
+            "Elite invariata.",
+        )
 
     if challenger_name == str(state.get("challenger") or ""):
         state["challenger_streak"] = int(
@@ -2709,43 +2821,60 @@ def update_strategy_follow_state(definitive, min_matches=100):
     else:
         state["challenger"] = challenger_name
         state["challenger_streak"] = 1
+        state["challenger_start_matches"] = challenger_matches
 
+    baseline_matches = int(
+        state.get("challenger_start_matches", challenger_matches)
+        or challenger_matches
+    )
+    new_matches = max(0, challenger_matches - baseline_matches)
+    state["challenger_new_matches"] = new_matches
     state["last_processed_snapshot"] = latest_snapshot
 
-    if int(state["challenger_streak"]) >= CHALLENGER_REQUIRED_STREAK:
+    enough_streak = (
+        int(state["challenger_streak"])
+        >= CHALLENGER_REQUIRED_STREAK
+    )
+    enough_new_evidence = new_matches >= required_new_matches
+
+    if enough_streak and enough_new_evidence:
         old_official = official_name
         state["official"] = challenger_name
         state["official_score"] = float(
             best.get("Punteggio definitivo", 0) or 0
         )
-        state["official_matches"] = int(best.get("Partite", 0) or 0)
-        state["official_roi"] = float(best.get("ROI %", 0) or 0)
-        state["official_profit"] = float(best.get("Profitto €", 0) or 0)
+        state["official_matches"] = challenger_matches
+        state["official_roi"] = float(
+            best.get("ROI %", 0) or 0
+        )
+        state["official_profit"] = float(
+            best.get("Profitto €", 0) or 0
+        )
         state["official_status"] = str(best.get("Stato", ""))
         state["official_consolidated"] = _eligible_initial_official(
             best,
             required_matches,
         )
-        state["required_matches"] = required_matches
         state["challenger"] = ""
         state["challenger_streak"] = 0
-        state["switch_count"] = int(state.get("switch_count", 0) or 0) + 1
+        state["challenger_start_matches"] = 0
+        state["challenger_new_matches"] = 0
+        state["switch_count"] = int(
+            state.get("switch_count", 0) or 0
+        ) + 1
         save_strategy_follow_state(state)
         return (
             state,
-            f"Cambio confermato: {old_official} → {challenger_name}. "
-            f"Lo sfidante è rimasto superiore per "
-            f"{CHALLENGER_REQUIRED_STREAK} rilevazioni consecutive.",
+            f"Cambio Elite confermato: {old_official} → "
+            f"{challenger_name}.",
         )
 
     save_strategy_follow_state(state)
     return (
         state,
-        f"Sfidante in osservazione: {challenger_name} "
-        f"({state['challenger_streak']}/"
-        f"{CHALLENGER_REQUIRED_STREAK} conferme consecutive).",
+        "Elite invariata: lo sfidante resta sotto osservazione finché "
+        "non accumula abbastanza conferme e nuove partite concluse.",
     )
-
 
 def strategy_follow_display_row(definitive, state, closed=None):
     """
@@ -5241,6 +5370,7 @@ elif page == "🧠 Trova metodo migliore":
             follow_state, follow_message = update_strategy_follow_state(
                 definitive,
                 min_matches=required_elite_matches,
+                closed=closed,
             )
             official_row = strategy_follow_display_row(
                 definitive,
