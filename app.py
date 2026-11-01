@@ -2267,10 +2267,13 @@ def save_strategy_follow_state(state):
 
 def elite_follow_timeline(df=None):
     """
-    Ricostruisce la cronologia reale della strategia ufficiale consigliata.
+    Ricostruisce ciò che l'utente vedeva dopo ogni ricerca.
 
-    Ogni cambio parte dal momento in cui lo stato è stato salvato: in questo
-    modo una strategia nuova non viene mai applicata retroattivamente.
+    Usa esclusivamente il campo "official" salvato negli stati tecnici:
+    - parte dal primo stato ufficiale consolidato del sistema a 5 conferme;
+    - mantiene la stessa strategia fino a un vero cambio di "official";
+    - non ricostruisce retroattivamente semafori o stati operativi con i
+      criteri attuali.
     """
     columns = [
         "Dal", "Al", "Strategia", "Consolidata",
@@ -2305,124 +2308,69 @@ def elite_follow_timeline(df=None):
             captured.tz_convert("Europe/Rome")
             .tz_localize(None)
         )
-
-        consolidated = bool(
-            state.get("official_consolidated", False)
-        )
-        required_matches = int(
-            state.get("required_matches", 100) or 100
-        )
-        official_matches = int(
-            state.get("official_matches", 0) or 0
-        )
-        official_roi = float(
-            state.get("official_roi", 0) or 0
-        )
-        official_profit = float(
-            state.get("official_profit", 0) or 0
-        )
-
-        operational_active = state.get("operational_active")
-        operational_label = str(
-            state.get("operational_label") or ""
-        )
-
-        # Per gli stati precedenti all'introduzione del salvataggio
-        # "da seguire / non da seguire", ricostruiamo l'indicazione usando
-        # soltanto le partite che erano già iniziate in quel momento.
-        if operational_active is None:
-            operational_active = (
-                consolidated
-                and official_matches >= required_matches
-                and official_roi > 0
-                and official_profit > 0
-            )
-
-            if operational_active and df is not None and not df.empty:
-                historical = df[
-                    df["outcome"].isin(["V", "P"])
-                ].copy()
-                historical_time = (
-                    historical["time"]
-                    .fillna("")
-                    .astype(str)
-                    .str.strip()
-                )
-                historical_time = historical_time.where(
-                    historical_time.str.match(r"^\d{1,2}:\d{2}$"),
-                    "12:00",
-                )
-                historical["_historical_kickoff"] = pd.to_datetime(
-                    historical["date"].astype(str)
-                    + " "
-                    + historical_time,
-                    errors="coerce",
-                )
-                historical = historical[
-                    historical["_historical_kickoff"] < captured_local
-                ]
-                historical_selected = apply_generated_strategy_name(
-                    historical,
-                    official,
-                )
-                historical_health = official_operational_status(
-                    historical_selected
-                )
-                operational_active = not str(
-                    historical_health.get("status") or ""
-                ).startswith("🔴")
-                operational_label = str(
-                    historical_health.get("status")
-                    or "Strategia consolidata"
-                )
-
-            if not operational_label:
-                operational_label = (
-                    "Strategia consolidata"
-                    if operational_active
-                    else "Non ancora da seguire"
-                )
+        if captured_local < ELITE_CONFIRMATION_SYSTEM_START:
+            continue
 
         states.append({
             "Dal": captured_local,
             "Strategia": official,
-            "Consolidata": consolidated,
-            "Indicazione attiva": bool(operational_active),
-            "Indicazione": (
-                operational_label
-                or "Strategia consolidata"
+            "Consolidata": bool(
+                state.get("official_consolidated", False)
+            ),
+            "Switch count": int(
+                state.get("switch_count", 0) or 0
             ),
         })
 
     if not states:
         return pd.DataFrame(columns=columns)
 
-    ordered = pd.DataFrame(states).sort_values("Dal").reset_index(drop=True)
+    ordered = (
+        pd.DataFrame(states)
+        .sort_values("Dal")
+        .reset_index(drop=True)
+    )
 
-    # Eliminiamo i salvataggi ripetuti identici e conserviamo soltanto i veri
-    # cambi di strategia, consolidamento o indicazione operativa.
-    compact = []
-    last_key = None
+    # L'utente ha iniziato a seguire la versione ufficiale quando questa è
+    # risultata per la prima volta consolidata. Prima di quel momento non
+    # esiste ancora un consiglio Elite definitivo da simulare.
+    consolidated_positions = ordered.index[
+        ordered["Consolidata"].fillna(False).astype(bool)
+    ].tolist()
+    if not consolidated_positions:
+        return pd.DataFrame(columns=columns)
+    ordered = ordered.loc[
+        consolidated_positions[0]:
+    ].reset_index(drop=True)
+
+    # Salviamo soltanto i veri cambi della strategia ufficiale. Gli stati
+    # ripetuti, i semafori e le variazioni del challenger non modificano ciò
+    # che l'utente stava seguendo.
+    changes = []
+    last_official = None
     for _, row in ordered.iterrows():
-        key = (
-            str(row["Strategia"]),
-            bool(row["Consolidata"]),
-            bool(row["Indicazione attiva"]),
-            str(row["Indicazione"]),
-        )
-        if key == last_key:
+        official = str(row["Strategia"])
+        if official == last_official:
             continue
-        compact.append(row.to_dict())
-        last_key = key
+        changes.append({
+            "Dal": row["Dal"],
+            "Strategia": official,
+            "Consolidata": True,
+            "Indicazione attiva": True,
+            "Indicazione": "Strategia ufficiale mostrata dopo la ricerca",
+        })
+        last_official = official
 
-    timeline = pd.DataFrame(compact)
+    if not changes:
+        return pd.DataFrame(columns=columns)
+
+    timeline = pd.DataFrame(changes)
     timeline["Al"] = timeline["Dal"].shift(-1)
     timeline.loc[timeline.index[-1], "Al"] = (
         pd.Timestamp.now(tz="Europe/Rome").tz_localize(None)
     )
 
     return timeline[columns]
-
 
 def simulate_dynamic_elite(df, stake=20.0, confirmed_only=False):
     """
@@ -5785,8 +5733,8 @@ elif page == "💰 Profitto Elite storico":
     )
     st.success(
         "✅ Agosto è incluso solo dal 20/08/2026 alle 22:52 in avanti. "
-        "Vengono conteggiate esclusivamente le partite successive a una "
-        "raccomandazione Elite consolidata e attiva."
+        "Da quel momento viene seguita la prima Elite consolidata e ogni "
+        "successivo cambio ufficiale registrato dopo una ricerca."
     )
 
     timeline, elite_bets, period_summary = simulate_dynamic_elite(
@@ -5979,10 +5927,9 @@ elif page == "💰 Profitto Elite storico":
                 )
 
         st.caption(
-            "Il calcolo usa esclusivamente dati disponibili alla data di ogni "
-            "consiglio. Per i vecchi stati in cui l'etichetta operativa non era "
-            "ancora salvata, la ricostruisce usando soltanto risultati già "
-            "conclusi in quel momento; non usa informazioni future."
+            "Il calcolo segue soltanto i cambi reali del campo «strategia "
+            "ufficiale» salvati dopo ogni ricerca. Semafori, challenger e "
+            "valutazioni ricostruite a posteriori non modificano i periodi."
         )
 
 
