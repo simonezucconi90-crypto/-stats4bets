@@ -188,6 +188,10 @@ def poll_results_workflow_status(previous_run_id=None):
     try:
         run = latest_named_workflow_run("results-update.yml")
     except Exception as exc:
+        # Se il token GitHub è scaduto il pulsante usa il fallback diretto:
+        # non mostriamo un falso allarme a ogni apertura della Home.
+        if _github_auth_unavailable(exc):
+            return
         st.warning(f"Non riesco a leggere lo stato della sessione: {exc}")
         return
 
@@ -215,6 +219,10 @@ def show_results_workflow_status():
     try:
         run = latest_named_workflow_run("results-update.yml")
     except Exception as exc:
+        # Se il token GitHub è scaduto il pulsante usa il fallback diretto:
+        # non mostriamo un falso allarme a ogni apertura della Home.
+        if _github_auth_unavailable(exc):
+            return
         st.warning(f"Non riesco a leggere lo stato della sessione: {exc}")
         return
 
@@ -259,6 +267,45 @@ def run_and_wait_named_workflow(workflow_file, timeout_seconds=150):
         time.sleep(5)
 
     return {"ok": False, "conclusion": "timeout", "url": ""}
+
+
+
+def _github_auth_unavailable(exc):
+    """Riconosce un token GitHub mancante, scaduto o revocato."""
+    text = str(exc or "").casefold()
+    return (
+        "401" in text
+        or "bad credentials" in text
+        or "requires authentication" in text
+    )
+
+
+def run_results_update_directly():
+    """
+    Fallback indipendente da GitHub Actions.
+
+    Usa le stesse credenziali Supabase dell'app e le fonti gratuite
+    dell'aggiornatore. RAPIDAPI e FootballData restano facoltative.
+    """
+    required = ("SUPABASE_URL", "SUPABASE_KEY")
+    for name in required + ("RAPIDAPI_KEY", "FOOTBALLDATA_IO_KEY"):
+        value = secret(name)
+        if value:
+            os.environ[name] = str(value)
+
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError(
+            "Mancano le credenziali Supabase necessarie: "
+            + ", ".join(missing)
+        )
+
+    import importlib
+    import update_results
+
+    # Ricarica il modulo per usare sempre il codice più recente pubblicato.
+    update_results = importlib.reload(update_results)
+    update_results.main()
 
 
 def trigger_collector_workflow():
@@ -4627,7 +4674,24 @@ elif page == "🏠 Home":
                 st.session_state["results_workflow_started_at"] = time.time()
                 st.rerun()
             except Exception as exc:
-                st.error(f"Errore aggiornamento risultati: {exc}")
+                if _github_auth_unavailable(exc):
+                    try:
+                        with st.spinner(
+                            "GitHub non è disponibile: aggiorno i risultati "
+                            "direttamente. Attendi il messaggio conclusivo…"
+                        ):
+                            run_results_update_directly()
+                        st.success(
+                            "✅ SESSIONE CONCLUSA — risultati e profitti "
+                            "aggiornati direttamente."
+                        )
+                    except Exception as direct_exc:
+                        st.error(
+                            "Errore aggiornamento diretto dei risultati: "
+                            f"{direct_exc}"
+                        )
+                else:
+                    st.error(f"Errore aggiornamento risultati: {exc}")
 
     with refresh_col:
         if st.button("↻ Ricarica", use_container_width=True):
