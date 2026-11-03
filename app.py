@@ -308,6 +308,54 @@ def run_results_update_directly():
     update_results.main()
 
 
+
+def run_collector_directly():
+    """
+    Fallback per Aggiorna partite, indipendente dal token GitHub.
+
+    Avvia il browser automatico direttamente sul server Streamlit usando
+    le credenziali già presenti nei Secrets dell'app.
+    """
+    required = (
+        "STATS4BETS_USER",
+        "STATS4BETS_PASSWORD",
+        "SUPABASE_URL",
+        "SUPABASE_KEY",
+    )
+    for name in required:
+        value = secret(name)
+        if value:
+            os.environ[name] = str(value)
+
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError(
+            "Mancano i Secrets necessari al raccoglitore diretto: "
+            + ", ".join(missing)
+        )
+
+    import importlib
+    import subprocess
+    import sys
+    import collector
+
+    collector = importlib.reload(collector)
+    try:
+        collector.main()
+    except Exception as exc:
+        text = str(exc).casefold()
+        if "executable doesn't exist" not in text and "playwright install" not in text:
+            raise
+        # Streamlit Cloud non conserva sempre il browser Playwright:
+        # se manca, lo installiamo una sola volta e ripartiamo.
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=True,
+            timeout=300,
+        )
+        collector.main()
+
+
 def trigger_collector_workflow():
     owner = secret("GITHUB_OWNER")
     repo = secret("GITHUB_REPO")
@@ -4630,14 +4678,16 @@ elif page == "🏠 Home":
     partite_col, risultati_col, refresh_col = st.columns([2, 2, 1])
 
     with partite_col:
-        if not github_configured():
-            st.warning("Configura i Secrets GitHub.")
-        elif st.button(
+        if st.button(
             "🔄 Aggiorna partite",
             type="primary",
             use_container_width=True,
         ):
             try:
+                if not github_configured():
+                    raise RuntimeError(
+                        "GitHub 401: configurazione assente o non valida."
+                    )
                 previous_run = latest_collector_run()
                 previous_run_id = previous_run.get("id") if previous_run else None
                 trigger_collector_workflow()
@@ -4648,7 +4698,7 @@ elif page == "🏠 Home":
                     )
 
                 if result["ok"]:
-                    st.success("✅ Partite aggiornate.")
+                    st.success("✅ SESSIONE CONCLUSA — partite aggiornate.")
                     time.sleep(1)
                     st.rerun()
                 elif result["conclusion"] == "timeout":
@@ -4656,7 +4706,24 @@ elif page == "🏠 Home":
                 else:
                     st.error(f'Errore workflow: {result["conclusion"]}')
             except Exception as exc:
-                st.error(f"Errore aggiornamento partite: {exc}")
+                if _github_auth_unavailable(exc):
+                    try:
+                        with st.spinner(
+                            "GitHub non è disponibile: cerco le nuove partite "
+                            "direttamente. Attendi il messaggio conclusivo…"
+                        ):
+                            run_collector_directly()
+                        st.success(
+                            "✅ SESSIONE CONCLUSA — nuove partite controllate "
+                            "e archivio aggiornato."
+                        )
+                    except Exception as direct_exc:
+                        st.error(
+                            "Errore aggiornamento diretto delle partite: "
+                            f"{direct_exc}"
+                        )
+                else:
+                    st.error(f"Errore aggiornamento partite: {exc}")
 
     with risultati_col:
         if st.button(
