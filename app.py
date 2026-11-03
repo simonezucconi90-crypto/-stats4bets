@@ -4659,13 +4659,15 @@ elif page == "🏠 Home":
                 st.error(f"Errore aggiornamento partite: {exc}")
 
     with risultati_col:
-        if not github_configured():
-            st.warning("Configura i Secrets GitHub.")
-        elif st.button(
+        if st.button(
             "🏁 Aggiorna risultati e profitti",
             use_container_width=True,
         ):
             try:
+                if not github_configured():
+                    raise RuntimeError(
+                        "GitHub 401: configurazione assente o non valida."
+                    )
                 previous_run = latest_named_workflow_run("results-update.yml")
                 trigger_named_workflow("results-update.yml")
                 st.session_state["results_workflow_previous_id"] = (
