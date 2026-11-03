@@ -2,6 +2,9 @@ name: Stats4Bets Collector Step 4 Supabase
 
 "on":
   workflow_dispatch: {}
+  schedule:
+    # Aggiornamento automatico più volte al giorno (orari UTC).
+    - cron: "20 5,11,17,22 * * *"
   push:
     branches:
       - main
