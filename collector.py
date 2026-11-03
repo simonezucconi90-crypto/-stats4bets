@@ -401,3 +401,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Trigger manutenzione: fallback Streamlit verificato 2026-11-03.
