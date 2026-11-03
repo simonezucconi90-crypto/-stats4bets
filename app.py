@@ -4718,10 +4718,18 @@ elif page == "🏠 Home":
                             "e archivio aggiornato."
                         )
                     except Exception as direct_exc:
-                        st.error(
-                            "Errore aggiornamento diretto delle partite: "
-                            f"{direct_exc}"
-                        )
+                        if "Mancano i Secrets necessari" in str(direct_exc):
+                            st.warning(
+                                "Il raccoglitore automatico sul server resta "
+                                "attivo e aggiorna le partite più volte al giorno. "
+                                "Il collegamento manuale GitHub deve essere "
+                                "rinnovato; l'archivio non è bloccato."
+                            )
+                        else:
+                            st.error(
+                                "Errore aggiornamento diretto delle partite: "
+                                f"{direct_exc}"
+                            )
                 else:
                     st.error(f"Errore aggiornamento partite: {exc}")
 
