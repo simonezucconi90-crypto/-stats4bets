@@ -5,6 +5,9 @@ name: Stats4Bets Collector Step 4 Supabase
   schedule:
     # Aggiornamento automatico ogni 3 ore, al minuto 17 (UTC).
     - cron: "17 */3 * * *"
+    # Controlli notturni: garantiscono una sessione alle 01:30 italiane
+    # sia con ora solare sia con ora legale (l’esecuzione extra è innocua).
+    - cron: "30 23,0 * * *"
   push:
     branches:
       - main
