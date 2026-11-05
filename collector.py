@@ -1,3 +1,4 @@
+# Raccolta manuale di verifica: 2026-11-05
 import os
 import re
 from datetime import datetime
