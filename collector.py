@@ -1,3 +1,4 @@
+# Raccolta immediata richiesta: 2026-11-05 seconda verifica
 # Raccolta manuale di verifica: 2026-11-05
 import os
 import re
