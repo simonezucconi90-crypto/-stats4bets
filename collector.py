@@ -2,7 +2,7 @@
 # Raccolta manuale di verifica: 2026-11-05
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
@@ -118,7 +118,10 @@ def parse_list(html):
     if grid is None:
         raise RuntimeError("Griglia partite non trovata.")
 
-    today = datetime.now(ZoneInfo("Europe/Rome")).strftime("%Y-%m-%d")
+    now_rome = datetime.now(ZoneInfo("Europe/Rome"))
+    today = now_rome.strftime("%Y-%m-%d")
+    tomorrow = (now_rome + timedelta(days=1)).strftime("%Y-%m-%d")
+    accepted_dates = {today, tomorrow}
     rows, seen = [], set()
 
     for card in grid.find_all("div", recursive=False):
@@ -153,7 +156,7 @@ def parse_list(html):
         detail_link = card.select_one('a[href*="statistiche.php?id="]')
         detail_url = urljoin(TARGET_URL, detail_link.get("href")) if detail_link else ""
 
-        if date_iso != today or prediction.casefold() != "ottimo 1":
+        if date_iso not in accepted_dates or prediction.casefold() != "ottimo 1":
             continue
 
         seen.add(source_id)
@@ -384,7 +387,7 @@ def main():
             today_rome = datetime.now(ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y")
             print(
                 f"Completato: nessuna nuova partita Ottimo 1 disponibile "
-                f"per il {today_rome}."
+                f"per oggi ({today_rome}) o per domani."
             )
             browser.close()
             return
