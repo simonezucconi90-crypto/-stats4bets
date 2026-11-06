@@ -3,6 +3,7 @@ import io
 import json
 import os
 import sqlite3
+import threading
 import time
 import math
 import re
@@ -1577,6 +1578,88 @@ def automatic_strategy_search(
     }
 
     return table, selections
+
+
+
+
+@st.cache_resource
+def strategy_background_state():
+    """Stato condiviso tra le sessioni Streamlit per la ricerca strategie."""
+    return {
+        "lock": threading.RLock(),
+        "running": False,
+        "ranking": None,
+        "selections": {},
+        "signature": "",
+        "error": "",
+        "started_at": "",
+        "finished_at": "",
+        "thread": None,
+    }
+
+
+def _strategy_background_worker(
+    closed,
+    min_sample,
+    max_filters,
+    top_n,
+    validation_ratio,
+    signature,
+):
+    state = strategy_background_state()
+    try:
+        ranking, selections = automatic_strategy_search(
+            closed,
+            min_sample=int(min_sample),
+            max_filters=int(max_filters),
+            top_n=int(top_n),
+            validation_ratio=float(validation_ratio),
+        )
+        with state["lock"]:
+            state["ranking"] = ranking
+            state["selections"] = selections
+            state["signature"] = signature
+            state["error"] = ""
+            state["finished_at"] = datetime.now(timezone.utc).isoformat()
+            state["running"] = False
+    except Exception as exc:
+        with state["lock"]:
+            state["error"] = str(exc)
+            state["finished_at"] = datetime.now(timezone.utc).isoformat()
+            state["running"] = False
+
+
+def start_strategy_background_search(
+    closed,
+    min_sample,
+    max_filters,
+    top_n,
+    validation_ratio,
+    signature,
+):
+    state = strategy_background_state()
+    with state["lock"]:
+        if state["running"]:
+            return False
+        state["running"] = True
+        state["error"] = ""
+        state["started_at"] = datetime.now(timezone.utc).isoformat()
+        worker = threading.Thread(
+            target=_strategy_background_worker,
+            kwargs={
+                "closed": closed.copy(deep=True),
+                "min_sample": int(min_sample),
+                "max_filters": int(max_filters),
+                "top_n": int(top_n),
+                "validation_ratio": float(validation_ratio),
+                "signature": signature,
+            },
+            daemon=True,
+            name="stats4bets-strategy-search",
+        )
+        state["thread"] = worker
+        worker.start()
+    return True
 
 
 STRATEGY_HISTORY_TABLE = "strategy_history"
@@ -5418,6 +5501,45 @@ elif page == "🧠 Trova metodo migliore":
             validation_ratio=float(validation_pct) / 100.0,
         )
 
+        background_state = strategy_background_state()
+        with background_state["lock"]:
+            background_running = bool(background_state["running"])
+            background_ranking = background_state["ranking"]
+            background_selections = background_state["selections"]
+            background_signature = background_state["signature"]
+            background_error = background_state["error"]
+            background_finished_at = background_state["finished_at"]
+
+        if (
+            not background_running
+            and isinstance(background_ranking, pd.DataFrame)
+            and background_signature == current_engine_signature
+        ):
+            st.session_state["strategy_ranking_v2"] = background_ranking.copy()
+            st.session_state["strategy_selections_v2"] = dict(
+                background_selections or {}
+            )
+            st.session_state[
+                "strategy_engine_signature_v3"
+            ] = background_signature
+            st.session_state[
+                "strategy_history_result"
+            ] = save_strategy_snapshot(background_ranking)
+            loaded_key = (
+                f"{background_signature}:{background_finished_at}"
+            )
+            if (
+                st.session_state.get("strategy_background_loaded_v1")
+                != loaded_key
+            ):
+                st.session_state[
+                    "strategy_background_loaded_v1"
+                ] = loaded_key
+                st.success(
+                    "✅ Ricerca strategie conclusa. "
+                    "La nuova Classifica Elite è pronta."
+                )
+
         previous_engine_signature = st.session_state.get(
             "strategy_engine_signature_v3"
         )
@@ -5441,46 +5563,46 @@ elif page == "🧠 Trova metodo migliore":
         )
 
         if manual_search or database_changed:
-            spinner_text = (
-                "Dati cambiati: aggiorno automaticamente strategie e statistiche..."
-                if database_changed and not manual_search
-                else "Analizzo le combinazioni..."
+            launched = start_strategy_background_search(
+                closed,
+                min_sample=int(min_sample),
+                max_filters=int(max_filters),
+                top_n=int(top_n),
+                validation_ratio=float(validation_pct) / 100.0,
+                signature=current_engine_signature,
             )
-
-            with st.spinner(spinner_text):
-                ranking, selections = automatic_strategy_search(
-                    closed,
-                    min_sample=int(min_sample),
-                    max_filters=int(max_filters),
-                    top_n=int(top_n),
-                    validation_ratio=float(validation_pct) / 100.0,
-                )
-
-                st.session_state[
-                    "strategy_ranking_v2"
-                ] = ranking
-
-                st.session_state[
-                    "strategy_selections_v2"
-                ] = selections
-
-                st.session_state[
-                    "strategy_engine_signature_v3"
-                ] = current_engine_signature
-
-                history_result = save_strategy_snapshot(
-                    ranking
-                )
-
-                st.session_state[
-                    "strategy_history_result"
-                ] = history_result
-
-            if database_changed and not manual_search:
+            if launched:
                 st.success(
-                    "🔄 Classifica aggiornata automaticamente: "
-                    "il database o i parametri del motore sono cambiati."
+                    "🚀 Ricerca avviata sul server. Puoi uscire dall'app, "
+                    "usare il telefono o spegnere lo schermo. Quando rientri "
+                    "in questa pagina vedrai il risultato concluso."
                 )
+            else:
+                st.info(
+                    "⏳ La ricerca strategie è già in corso sul server. "
+                    "Puoi uscire e tornare più tardi."
+                )
+
+        with background_state["lock"]:
+            background_running = bool(background_state["running"])
+            background_error = str(background_state["error"] or "")
+
+        if background_running:
+            st.info(
+                "⏳ Ricerca strategie in corso sul server. "
+                "Non serve lasciare aperta l'app."
+            )
+            if st.button(
+                "🔄 Controlla se la ricerca è terminata",
+                use_container_width=True,
+                key="check_strategy_background_v1",
+            ):
+                st.rerun()
+        elif background_error:
+            st.error(
+                "Errore durante la ricerca strategie in background: "
+                f"{background_error}"
+            )
 
         ranking = st.session_state.get(
             "strategy_ranking_v2"
