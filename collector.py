@@ -305,6 +305,26 @@ def load_internal_ids(client):
     return ids
 
 
+def delete_future_matches():
+    """Rimuove eventuali partite salvate prima del giorno corretto."""
+    client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    today = datetime.now(ZoneInfo("Europe/Rome")).strftime("%Y-%m-%d")
+    future_rows = (
+        client.table("matches")
+        .select("id,date")
+        .gt("date", today)
+        .execute()
+        .data
+        or []
+    )
+    if future_rows:
+        client.table("matches").delete().gt("date", today).execute()
+        print(
+            f"Pulizia: rimosse {len(future_rows)} partite con data successiva a oggi."
+        )
+    return len(future_rows)
+
+
 def save_to_supabase(records):
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
     inserted = 0
@@ -360,6 +380,7 @@ def save_to_supabase(records):
 
 
 def main():
+    delete_future_matches()
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         context = browser.new_context(
