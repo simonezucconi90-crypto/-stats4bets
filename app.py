@@ -1662,6 +1662,37 @@ def start_strategy_background_search(
     return True
 
 
+
+
+def load_scheduled_strategy_result():
+    """Carica l'ultima ricerca automatica salvata dal processo pianificato."""
+    path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "strategy_latest.json",
+    )
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        ranking_rows = payload.get("ranking") or []
+        ranking = pd.DataFrame(ranking_rows)
+        selections = {
+            str(key): [int(value) for value in (values or [])]
+            for key, values in (payload.get("selections") or {}).items()
+        }
+        return {
+            "ranking": ranking,
+            "selections": selections,
+            "engine_signature": str(
+                payload.get("engine_signature") or ""
+            ),
+            "generated_at": str(payload.get("generated_at") or ""),
+        }
+    except Exception:
+        return None
+
+
 STRATEGY_HISTORY_TABLE = "strategy_history"
 
 
@@ -5500,6 +5531,51 @@ elif page == "🧠 Trova metodo migliore":
             top_n=int(top_n),
             validation_ratio=float(validation_pct) / 100.0,
         )
+
+        scheduled_result = load_scheduled_strategy_result()
+        if scheduled_result is not None:
+            scheduled_ranking = scheduled_result["ranking"]
+            scheduled_signature = scheduled_result["engine_signature"]
+            session_ranking = st.session_state.get("strategy_ranking_v2")
+            session_signature = st.session_state.get(
+                "strategy_engine_signature_v3"
+            )
+            if (
+                isinstance(scheduled_ranking, pd.DataFrame)
+                and not scheduled_ranking.empty
+                and scheduled_signature == current_engine_signature
+                and (
+                    not isinstance(session_ranking, pd.DataFrame)
+                    or session_ranking.empty
+                    or session_signature != current_engine_signature
+                )
+            ):
+                st.session_state[
+                    "strategy_ranking_v2"
+                ] = scheduled_ranking.copy()
+                st.session_state[
+                    "strategy_selections_v2"
+                ] = dict(scheduled_result["selections"])
+                st.session_state[
+                    "strategy_engine_signature_v3"
+                ] = scheduled_signature
+                scheduled_key = (
+                    f"{scheduled_signature}:"
+                    f"{scheduled_result['generated_at']}"
+                )
+                if (
+                    st.session_state.get(
+                        "scheduled_strategy_loaded_v1"
+                    )
+                    != scheduled_key
+                ):
+                    st.session_state[
+                        "scheduled_strategy_loaded_v1"
+                    ] = scheduled_key
+                    st.success(
+                        "✅ Strategia Elite aggiornata automaticamente. "
+                        "Non è stato necessario avviare una nuova ricerca."
+                    )
 
         background_state = strategy_background_state()
         with background_state["lock"]:
