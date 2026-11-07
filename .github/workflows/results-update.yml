@@ -43,7 +43,7 @@ jobs:
           event = os.environ.get("EVENT_NAME", "")
           schedule = os.environ.get("SCHEDULE", "")
           run_results = True
-          run_strategy = event == "workflow_dispatch"
+          run_strategy = event in {"workflow_dispatch", "push"}
 
           if event == "schedule":
               utc_hour = int(schedule.split()[1])
