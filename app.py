@@ -4098,15 +4098,33 @@ st.markdown(
     .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
         padding-bottom:calc(6rem + env(safe-area-inset-bottom, 0px)) !important;
     }
-    /* Streamlit Cloud's Manage app control sits at the viewport bottom. */
+    /* Keep the Cloud control reachable without showing scrolling content below the dock. */
     @media (max-width: 1100px) {
         .st-key-s4b_bottom {
-            bottom:calc(3.5rem + env(safe-area-inset-bottom, 0px));
+            --s4b-cloud-space:calc(3.5rem + env(safe-area-inset-bottom, 0px));
+            bottom:var(--s4b-cloud-space);
             padding-bottom:.42rem;
-            border-radius:1rem;
+            border-radius:1rem 1rem 0 0;
+        }
+        .st-key-s4b_bottom::after {
+            content:"";
+            position:absolute;
+            top:calc(100% - 1px);
+            left:50%;
+            width:100vw;
+            height:calc(var(--s4b-cloud-space) + 3px);
+            transform:translateX(-50%);
+            background:var(--background-color, Canvas);
+            z-index:-1;
+            pointer-events:none;
         }
         .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
+            padding-top:3.65rem !important;
             padding-bottom:calc(9.5rem + env(safe-area-inset-bottom, 0px)) !important;
+        }
+        .s4b-section {
+            margin:.12rem 0 .35rem;
+            padding:.56rem .85rem;
         }
     }
     </style>
