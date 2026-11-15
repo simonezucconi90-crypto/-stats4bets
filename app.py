@@ -4008,45 +4008,138 @@ def editor_form(data, prefix):
     return data
 
 
-PAGE_OPTIONS = [
-    "🏠 Home", "🎯 Partite da giocare", "🧠 Trova metodo migliore",
-    "📅 Analisi mensile", "📋 Database", "📊 Dashboard",
-    "💰 Profitto Elite storico", "🔎 Analisi filtri", "🧪 Laboratorio Strategie",
-    "⚡ Inserimento rapido", "➕ Nuova partita", "🏆 Aggiorna risultato",
-    "✏️ Modifica/Elimina", "📥 Importa/Esporta", "⚙️ Configurazione",
-]
+S4B_MAIN = (
+    ("Oggi", "🎯 Partite da giocare", "oggi", "calendar_today"),
+    ("Elite", "🧠 Trova metodo migliore", "elite", "star"),
+    ("Analisi", "📅 Analisi mensile", "analisi", "bar_chart"),
+    ("Altro", "Altro", "altro", "more_horiz"),
+)
+S4B_GROUPS = (
+    ("Archivio", (
+        ("Database", "📋 Database"),
+        ("Inserisci partita", "➕ Nuova partita"),
+        ("Inserimento rapido", "⚡ Inserimento rapido"),
+        ("Aggiorna risultato", "🏆 Aggiorna risultato"),
+        ("Modifica o elimina", "✏️ Modifica/Elimina"),
+    )),
+    ("Analisi avanzate", (
+        ("Dashboard", "📊 Dashboard"),
+        ("Profitto Elite storico", "💰 Profitto Elite storico"),
+        ("Analisi filtri", "🔎 Analisi filtri"),
+        ("Laboratorio strategie", "🧪 Laboratorio Strategie"),
+    )),
+    ("Strumenti", (
+        ("Aggiornamenti manuali e riepilogo", "🏠 Home"),
+        ("Importa o esporta", "📥 Importa/Esporta"),
+        ("Impostazioni", "⚙️ Configurazione"),
+    )),
+)
+S4B_MAIN_IDS = {destination: section for _, destination, section, _ in S4B_MAIN}
+S4B_ROUTES = set(S4B_MAIN_IDS) | {
+    destination for _, entries in S4B_GROUPS for _, destination in entries
+}
 
 
 def open_stats4bets_page(destination):
-    st.session_state["stats4bets_page"] = destination
+    if destination in S4B_ROUTES:
+        st.session_state["stats4bets_route"] = destination
 
 
-def stats4bets_home_shortcuts():
-    for column, (label, destination, priority) in zip(
-        st.columns(3),
-        [
-            ("🎯 Partite da giocare", "🎯 Partite da giocare", "primary"),
-            ("🏆 Classifica Elite", "🧠 Trova metodo migliore", "secondary"),
-            ("📅 Analisi mensile", "📅 Analisi mensile", "secondary"),
-        ],
-    ):
-        column.button(
-            label,
-            key=f"home_shortcut_{destination}",
-            type=priority,
-            use_container_width=True,
-            on_click=open_stats4bets_page,
-            args=(destination,),
-        )
+page = st.session_state.get("stats4bets_route", S4B_MAIN[0][1])
+if page not in S4B_ROUTES:
+    page = S4B_MAIN[0][1]
+active_section = S4B_MAIN_IDS.get(page, "altro")
+
+st.markdown(
+    """
+    <style>
+    .s4b-brand { color:#8eacc2; font-size:1rem; font-weight:760;
+        letter-spacing:.02em; padding:.15rem 0 .25rem; }
+    .s4b-brand b { color:#35a982; }
+    .s4b-section { margin:.3rem 0 1rem; padding:.8rem 1rem .85rem;
+        border-inline-start:4px solid var(--s4b-accent);
+        border-radius:.75rem; background:var(--s4b-tint); }
+    .s4b-section h1 { margin:0; padding:0; font-size:clamp(1.9rem,6vw,2.6rem); }
+    .s4b-section--oggi { --s4b-accent:#48c69c; --s4b-tint:rgba(72,198,156,.12); }
+    .s4b-section--elite { --s4b-accent:#e8ad50; --s4b-tint:rgba(232,173,80,.14); }
+    .s4b-section--analisi { --s4b-accent:#56a2f0; --s4b-tint:rgba(86,162,240,.13); }
+    .s4b-section--altro { --s4b-accent:#a680ed; --s4b-tint:rgba(166,128,237,.13); }
+    .st-key-s4b_bottom {
+        position:fixed; z-index:99; bottom:0; left:50%; transform:translateX(-50%);
+        width:min(100%, 45rem) !important; max-width:45rem;
+        padding:.42rem .5rem calc(.42rem + env(safe-area-inset-bottom, 0px));
+        background:var(--background-color, Canvas);
+        border:1px solid rgba(128,140,154,.33);
+        border-radius:1rem 1rem 0 0;
+        box-shadow:0 -.4rem 1.6rem rgba(0,0,0,.12);
+    }
+    .st-key-s4b_bottom [data-testid="stHorizontalBlock"] {
+        flex-wrap:nowrap !important; gap:.3rem !important;
+    }
+    .st-key-s4b_bottom [data-testid="stColumn"] {
+        flex:1 1 0 !important; min-width:0 !important; width:auto !important;
+    }
+    .st-key-s4b_bottom button {
+        padding:.25rem .1rem; min-height:3rem; border-radius:.65rem;
+        border-color:transparent; background:transparent;
+    }
+    .st-key-s4b_bottom button p { font-size:clamp(.75rem, 3.4vw, .95rem); }
+    .st-key-s4b_nav_oggi { --nav:#309c79; --nav-bg:rgba(72,198,156,.20); }
+    .st-key-s4b_nav_elite { --nav:#b47a22; --nav-bg:rgba(232,173,80,.23); }
+    .st-key-s4b_nav_analisi { --nav:#3b83c8; --nav-bg:rgba(86,162,240,.21); }
+    .st-key-s4b_nav_altro { --nav:#8d64cb; --nav-bg:rgba(166,128,237,.22); }
+    .st-key-s4b_bottom button[kind="primary"] {
+        color:var(--text-color, CanvasText); background:var(--nav-bg);
+        border-color:var(--nav); font-weight:750;
+    }
+    .st-key-s4b_match_list [data-testid="stVerticalBlockBorderWrapper"] {
+        border-inline-start-color:#48c69c;
+    }
+    .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
+        padding-bottom:calc(6rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+with st.container(key="s4b_bottom"):
+    for col, (label, destination, section, icon) in zip(st.columns(4), S4B_MAIN):
+        with col:
+            with st.container(key=f"s4b_nav_{section}"):
+                st.button(
+                    f":material/{icon}: {label}",
+                    key=f"s4b_tab_{section}",
+                    type="primary" if section == active_section else "secondary",
+                    on_click=open_stats4bets_page,
+                    args=(destination,),
+                    use_container_width=True,
+                )
+
+st.markdown('<div class="s4b-brand">Stats<b>4</b>Bets</div>', unsafe_allow_html=True)
 
 
-st.sidebar.title("Stats4Bets")
-page = st.sidebar.radio("Vai a", PAGE_OPTIONS, key="stats4bets_page")
-if page != "🏠 Home":
-    st.caption("Stats4Bets  /  " + page.split(" ", 1)[-1])
+def s4b_section_header(title, section):
+    st.markdown(
+        f'<section class="s4b-section s4b-section--{section}"><h1>{title}</h1></section>',
+        unsafe_allow_html=True,
+    )
 
 
-if page == "⚡ Inserimento rapido":
+if page == "Altro":
+    s4b_section_header("Altro", "altro")
+    for heading, entries in S4B_GROUPS:
+        st.markdown(f"#### {heading}")
+        for label, destination in entries:
+            st.button(
+                f"{label}   ›",
+                key=f"s4b_more_{destination}",
+                on_click=open_stats4bets_page,
+                args=(destination,),
+                use_container_width=True,
+            )
+
+elif page == "⚡ Inserimento rapido":
     st.subheader("⚡ Inserimento rapido")
     st.caption("Compila solo i campi principali. Gli altri sono facoltativi.")
     record = blank_match()
@@ -4111,6 +4204,7 @@ if page == "⚡ Inserimento rapido":
             st.balloons()
 
 elif page == "📅 Analisi mensile":
+    s4b_section_header("Analisi", "analisi")
     st.subheader("📅 Analisi mensile strategie")
     st.caption(
         "Scegli una strategia già trovata dal motore oppure costruiscila manualmente. "
@@ -4371,7 +4465,8 @@ elif page == "📅 Analisi mensile":
 
 
 elif page == "🎯 Partite da giocare":
-    st.subheader("🎯 Partite da giocare")
+    s4b_section_header("Oggi", "oggi")
+    st.subheader("Partite da giocare")
     st.caption("Proposte della strategia ufficiale e ricerca con filtri manuali.")
 
     df = get_matches()
@@ -4502,19 +4597,20 @@ elif page == "🎯 Partite da giocare":
                 show = show.sort_values(
                     ["Data", "Ora"], ascending=[False, False], na_position="last"
                 )
-                for _, row in show.head(8).iterrows():
-                    with st.container(border=True):
-                        match_name = str(row.get("Partita") or "Partita")
-                        st.write(match_name)
-                        date_value = pd.to_datetime(row.get("Data"), errors="coerce")
-                        date_label = date_value.strftime("%d/%m") if pd.notna(date_value) else "–"
-                        time_label = row.get("Ora", "")
-                        league = row.get("Campionato", "")
-                        quote = row.get("Quota")
-                        quote_label = f"{quote:.2f}" if pd.notna(quote) else "–"
-                        st.caption(f"{date_label} · {time_label} · Quota {quote_label}")
-                        if league:
-                            st.caption(str(league))
+                with st.container(key="s4b_match_list"):
+                    for _, row in show.head(8).iterrows():
+                        with st.container(border=True):
+                            match_name = str(row.get("Partita") or "Partita")
+                            st.write(match_name)
+                            date_value = pd.to_datetime(row.get("Data"), errors="coerce")
+                            date_label = date_value.strftime("%d/%m") if pd.notna(date_value) else "–"
+                            time_label = row.get("Ora", "")
+                            league = row.get("Campionato", "")
+                            quote = row.get("Quota")
+                            quote_label = f"{quote:.2f}" if pd.notna(quote) else "–"
+                            st.caption(f"{date_label} · {time_label} · Quota {quote_label}")
+                            if league:
+                                st.caption(str(league))
 
                 details_label = "Tabella completa e indicatori"
                 if len(show) > 8:
@@ -4819,33 +4915,7 @@ elif page == "🎯 Partite da giocare":
 
 elif page == "🏠 Home":
 
-    st.markdown(
-        """
-        <style>
-        .s4b-home-hero {
-            padding: 1.25rem 1.3rem;
-            margin: .15rem 0 1rem;
-            border: 1px solid rgba(65, 145, 116, .32);
-            border-radius: 1.1rem;
-            background: linear-gradient(105deg, rgba(46, 150, 113, .14),
-                rgba(71, 113, 164, .07));
-        }
-        .s4b-home-hero p { margin: 0; }
-        .s4b-home-hero h1 { margin: 0; padding: .15rem 0 .35rem;
-            font-size: clamp(1.9rem, 6vw, 2.7rem); line-height: 1.15; }
-        .s4b-home-kicker { font-size: .78rem; font-weight: 650;
-            letter-spacing: .09em; text-transform: uppercase; }
-        </style>
-        <section class="s4b-home-hero" aria-label="Stats4Bets">
-            <p class="s4b-home-kicker">Il tuo cruscotto</p>
-            <h1>Stats4Bets</h1>
-            <p>Partite, strategia e risultati in un unico posto.</p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-    stats4bets_home_shortcuts()
-
+    s4b_section_header("Gestione e riepilogo", "altro")
     st.subheader("Riepilogo")
     df = get_matches()
     s = summary(df)
@@ -5520,6 +5590,7 @@ elif page == "🧪 Laboratorio Strategie":
 
 
 elif page == "🧠 Trova metodo migliore":
+    s4b_section_header("Elite", "elite")
     st.subheader("🏆 Strategie — decisione rapida")
     st.caption(
         "Qui trovi soltanto ciò che serve per decidere: stato della strategia "
