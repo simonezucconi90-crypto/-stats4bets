@@ -4155,40 +4155,42 @@ def s4b_section_header(title, section):
     )
 
 
-@st.cache_data(ttl=120, show_spinner=False)
+@st.cache_data(ttl=180, show_spinner=False)
 def s4b_last_collector_completion():
-    """Last successful run of the dedicated matches collector, not Elite/results."""
+    """Show completion of an actual collection, not a skipped scheduler check."""
     owner = secret("GITHUB_OWNER", "simonezucconi90-crypto") or "simonezucconi90-crypto"
     repo = secret("GITHUB_REPO", "-stats4bets") or "-stats4bets"
-    url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/collect.yml/runs"
-    public_headers = {"Accept": "application/vnd.github+json"}
-    header_options = [public_headers]
+    base_url = f"https://api.github.com/repos/{owner}/{repo}/actions"
+    header_options = []
     if secret("GITHUB_TOKEN"):
         header_options.append(github_headers())
+    header_options.append({"Accept": "application/vnd.github+json"})
+
+    def get(path, headers, params=None):
+        response = requests.get(
+            base_url + path, headers=headers, params=params, timeout=(2, 3)
+        )
+        response.raise_for_status()
+        return response.json()
+
     for headers in header_options:
         try:
-            response = requests.get(
-                url,
-                headers=headers,
-                params={"branch": "main", "status": "success", "per_page": 5},
-                timeout=(2, 3),
-            )
-            response.raise_for_status()
-            runs = response.json().get("workflow_runs", [])
-            return max(
-                (
-                    datetime.fromisoformat(run["updated_at"].replace("Z", "+00:00"))
-                    for run in runs
-                    if run.get("status") == "completed"
-                    and run.get("conclusion") == "success"
-                    and run.get("updated_at")
-                ),
-                default=None,
-            )
-        except (requests.RequestException, ValueError, TypeError, AttributeError):
+            runs = get("/workflows/collect.yml/runs", headers, {
+                "branch": "main", "status": "success", "per_page": 12,
+            }).get("workflow_runs", [])
+            for run in runs:
+                if run.get("status") != "completed" or run.get("conclusion") != "success":
+                    continue
+                jobs = get(f"/runs/{int(run['id'])}/jobs", headers).get("jobs", [])
+                for job in jobs:
+                    for step in job.get("steps", []):
+                        if (step.get("name") == "Estrai e salva su Supabase"
+                                and step.get("conclusion") == "success"
+                                and step.get("completed_at")):
+                            return datetime.fromisoformat(step["completed_at"].replace("Z", "+00:00"))
+        except (requests.RequestException, ValueError, TypeError, AttributeError, KeyError):
             continue
     return None
-
 
 def s4b_collector_update_label(completed_at):
     from zoneinfo import ZoneInfo

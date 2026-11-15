@@ -3,16 +3,22 @@ name: Stats4Bets Collector Step 4 Supabase
 "on":
   workflow_dispatch: {}
   schedule:
-    - cron: "10 0,6,12,18 * * *"
-      timezone: "Europe/Rome"
+    # UTC: una serie per l'ora solare e una per l'ora legale.
+    - cron: "10 5,11,17,23 * * *"
+    - cron: "10 4,10,16,22 * * *"
+    # Recuperi: lo stesso controllo di fascia evita di ripetere una raccolta riuscita.
+    - cron: "30 5,11,17,23 * * *"
+    - cron: "30 4,10,16,22 * * *"
   push:
     branches:
       - main
     paths:
       - collector.py
+      - .github/workflows/collect.yml
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: stats4bets-collect
@@ -24,19 +30,90 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - name: Verifica fascia italiana
+        id: schedule_gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          GH_TOKEN: ${{ github.token }}
+          COLLECT_RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from urllib.parse import urlencode
+          from urllib.request import Request, urlopen
+          from datetime import datetime, timedelta, timezone
+          from zoneinfo import ZoneInfo
+
+          run = True
+          if os.environ["EVENT_NAME"] == "schedule":
+              now = datetime.now(timezone.utc)
+              minute_text, hours_text, *_ = os.environ["SCHEDULE"].split()
+              minutes = int(minute_text)
+              hours = [int(hour) for hour in hours_text.split(",")]
+              slots = [
+                  (now - timedelta(days=day)).replace(hour=hour, minute=minutes, second=0, microsecond=0)
+                  for day in (0, 1)
+                  for hour in hours
+              ]
+              planned = max(slot for slot in slots if slot <= now)
+              rome = ZoneInfo("Europe/Rome")
+              local = planned.astimezone(rome)
+              actual = now.astimezone(rome)
+              minute = actual.hour * 60 + actual.minute
+              starts = (10, 370, 730, 1090)
+              current_start = max((start for start in starts if start <= minute), default=-1)
+              planned_start = local.hour * 60 + local.minute - (minutes - 10)
+              run = local.date() == actual.date() and planned_start == current_start
+              if run:
+                  api = f'{os.environ["GITHUB_API_URL"]}/repos/{os.environ["GITHUB_REPOSITORY"]}/actions'
+                  start = planned - timedelta(minutes=minutes - 10)
+                  query = urlencode({"branch": "main", "status": "success", "created": f">={start.isoformat()}", "per_page": 15})
+
+                  def read(path):
+                      req = Request(api + path, headers={
+                          "Authorization": f'Bearer {os.environ["GH_TOKEN"]}',
+                          "Accept": "application/vnd.github+json",
+                      })
+                      with urlopen(req, timeout=8) as response:
+                          return json.load(response)
+
+                  try:
+                      for previous in read(f"/workflows/collect.yml/runs?{query}").get("workflow_runs", []):
+                          if str(previous["id"]) == os.environ["COLLECT_RUN_ID"]:
+                              continue
+                          jobs = read(f'/runs/{previous["id"]}/jobs').get("jobs", [])
+                          if any(step.get("name") == "Estrai e salva su Supabase"
+                                 and step.get("conclusion") == "success"
+                                 for job in jobs for step in job.get("steps", [])):
+                              print("Fascia già raccolta: nessuna nuova esecuzione.")
+                              run = False
+                              break
+                  except Exception as exc:
+                      print(f"Verifica precedente non disponibile ({type(exc).__name__}): continuo la raccolta.")
+              print(f"Orario previsto: {local:%d/%m %H:%M}; fascia attiva: {run}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print(f"run={'true' if run else 'false'}", file=output)
+          PY
+
       - uses: actions/checkout@v4
+        if: steps.schedule_gate.outputs.run == 'true'
 
       - uses: actions/setup-python@v5
+        if: steps.schedule_gate.outputs.run == 'true'
         with:
           python-version: "3.12"
           cache: pip
 
       - name: Installa dipendenze
+        if: steps.schedule_gate.outputs.run == 'true'
         run: |
           pip install -r requirements-collector.txt
           playwright install --with-deps chromium
 
       - name: Estrai e salva su Supabase
+        if: steps.schedule_gate.outputs.run == 'true'
         env:
           STATS4BETS_USER: ${{ secrets.STATS4BETS_USER }}
           STATS4BETS_PASSWORD: ${{ secrets.STATS4BETS_PASSWORD }}
