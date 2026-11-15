@@ -4008,16 +4008,43 @@ def editor_form(data, prefix):
     return data
 
 
-st.title("📊 Stats4Bets")
-st.caption(f"Archivio e analisi partite • Archivio: {storage_label()}")
+PAGE_OPTIONS = [
+    "🏠 Home", "🎯 Partite da giocare", "🧠 Trova metodo migliore",
+    "📅 Analisi mensile", "📋 Database", "📊 Dashboard",
+    "💰 Profitto Elite storico", "🔎 Analisi filtri", "🧪 Laboratorio Strategie",
+    "⚡ Inserimento rapido", "➕ Nuova partita", "🏆 Aggiorna risultato",
+    "✏️ Modifica/Elimina", "📥 Importa/Esporta", "⚙️ Configurazione",
+]
 
-page = st.sidebar.radio("Menu", [
-    "🏠 Home","🎯 Partite da giocare","📅 Analisi mensile","⚡ Inserimento rapido",
-    "➕ Nuova partita","📋 Database","🏆 Aggiorna risultato","✏️ Modifica/Elimina",
-    "📊 Dashboard","🔎 Analisi filtri","🧪 Laboratorio Strategie",
-    "🧠 Trova metodo migliore","💰 Profitto Elite storico",
-    "📥 Importa/Esporta","⚙️ Configurazione"
-])
+
+def open_stats4bets_page(destination):
+    st.session_state["stats4bets_page"] = destination
+
+
+def stats4bets_home_shortcuts():
+    for column, (label, destination, priority) in zip(
+        st.columns(3),
+        [
+            ("🎯 Partite da giocare", "🎯 Partite da giocare", "primary"),
+            ("🏆 Classifica Elite", "🧠 Trova metodo migliore", "secondary"),
+            ("📅 Analisi mensile", "📅 Analisi mensile", "secondary"),
+        ],
+    ):
+        column.button(
+            label,
+            key=f"home_shortcut_{destination}",
+            type=priority,
+            use_container_width=True,
+            on_click=open_stats4bets_page,
+            args=(destination,),
+        )
+
+
+st.sidebar.title("Stats4Bets")
+page = st.sidebar.radio("Vai a", PAGE_OPTIONS, key="stats4bets_page")
+if page != "🏠 Home":
+    st.caption("Stats4Bets  /  " + page.split(" ", 1)[-1])
+
 
 if page == "⚡ Inserimento rapido":
     st.subheader("⚡ Inserimento rapido")
@@ -4345,10 +4372,7 @@ elif page == "📅 Analisi mensile":
 
 elif page == "🎯 Partite da giocare":
     st.subheader("🎯 Partite da giocare")
-    st.caption(
-        "Qui puoi applicare la strategia ufficiale oppure usare tutti i filtri manuali. "
-        "I filtri restano sempre visibili, anche quando non ci sono partite in attesa."
-    )
+    st.caption("Proposte della strategia ufficiale e ricerca con filtri manuali.")
 
     df = get_matches()
 
@@ -4358,8 +4382,6 @@ elif page == "🎯 Partite da giocare":
         pending = df[
             ~df["outcome"].isin(["V", "P"])
         ].copy()
-
-    st.metric("Partite attualmente in attesa", len(pending))
 
     def popts(col):
         # Le opzioni dei filtri vengono prese dall'intero database,
@@ -4378,14 +4400,8 @@ elif page == "🎯 Partite da giocare":
             if v and v.lower() not in {"nan", "none"}
         )
 
-    st.info(
-        "ℹ️ 'Allibramento valore < media della partita' significa che il confronto "
-        "è fatto per ogni singola partita: Valore ALLB < Media ALLB. "
-        "Nelle tabelle trovi entrambi i valori e il confronto già calcolato."
-    )
-
     auto_tab, manual_tab = st.tabs([
-        "🎯 Strategia ufficiale",
+        "🎯 Proposte Elite",
         "🎛️ Filtri manuali",
     ])
 
@@ -4438,19 +4454,11 @@ elif page == "🎯 Partite da giocare":
                 "non supera i controlli minimi."
             )
         else:
-            st.success(
-                "🎯 Strategia applicata: " + human_strategy_name(official)
-            )
+            auto = apply_generated_strategy_name(pending, official)
 
-            auto = apply_generated_strategy_name(
-                pending,
-                official,
-            )
-
-            st.metric(
-                "Partite compatibili con la strategia ufficiale",
-                len(auto),
-            )
+            st.metric("Proposte compatibili", len(auto))
+            st.caption("Strategia: " + human_strategy_name(official))
+            st.caption("Quote e indicatori rilevati al primo salvataggio, non in tempo reale.")
 
             if auto.empty:
                 st.info(
@@ -4491,17 +4499,42 @@ elif page == "🎯 Partite da giocare":
                     "status":"STATUS",
                 })
 
-                st.dataframe(
-                    show.sort_values(
-                        ["Data", "Ora"],
-                        ascending=[False, False],
-                        na_position="last",
-                    ),
-                    use_container_width=True,
-                    hide_index=True,
+                show = show.sort_values(
+                    ["Data", "Ora"], ascending=[False, False], na_position="last"
                 )
+                for _, row in show.head(8).iterrows():
+                    with st.container(border=True):
+                        match_name = str(row.get("Partita") or "Partita")
+                        st.write(match_name)
+                        date_value = pd.to_datetime(row.get("Data"), errors="coerce")
+                        date_label = date_value.strftime("%d/%m") if pd.notna(date_value) else "–"
+                        time_label = row.get("Ora", "")
+                        league = row.get("Campionato", "")
+                        quote = row.get("Quota")
+                        quote_label = f"{quote:.2f}" if pd.notna(quote) else "–"
+                        st.caption(f"{date_label} · {time_label} · Quota {quote_label}")
+                        if league:
+                            st.caption(str(league))
+
+                details_label = "Tabella completa e indicatori"
+                if len(show) > 8:
+                    details_label = f"Tutte le {len(show)} proposte e indicatori"
+                with st.expander(details_label):
+                    st.dataframe(
+                        show[["Partita", "Ora", "Quota"] + [
+                            col for col in show.columns if col not in {"Partita", "Ora", "Quota"}
+                        ]],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
     with manual_tab:
+        st.caption(f"Partite in attesa nell’archivio: {len(pending)}")
+        with st.expander("Come leggere l’allibramento"):
+            st.write(
+                "Il confronto è per singola partita: il valore ALLB viene confrontato "
+                "con la sua media. Nella tabella trovi valore, media e differenza."
+            )
         st.markdown("### Indicatori")
 
         a,b,c = st.columns(3)
@@ -4786,138 +4819,156 @@ elif page == "🎯 Partite da giocare":
 
 elif page == "🏠 Home":
 
-    st.subheader("Gestione completa dal telefono")
-
-    st.markdown("### 🤖 Aggiornamento automatico")
-    partite_col, risultati_col, refresh_col = st.columns([2, 2, 1])
-
-    with partite_col:
-        if st.button(
-            "🔄 Aggiorna partite",
-            type="primary",
-            use_container_width=True,
-        ):
-            try:
-                if not github_configured():
-                    raise RuntimeError(
-                        "GitHub 401: configurazione assente o non valida."
-                    )
-                previous_run = latest_collector_run()
-                previous_run_id = previous_run.get("id") if previous_run else None
-                trigger_collector_workflow()
-                st.success("Raccolta partite avviata.")
-                with st.spinner("Attendi circa 1-2 minuti..."):
-                    result = wait_for_collector(
-                        previous_run_id=previous_run_id
-                    )
-
-                if result["ok"]:
-                    st.success("✅ SESSIONE CONCLUSA — partite aggiornate.")
-                    time.sleep(1)
-                    st.rerun()
-                elif result["conclusion"] == "timeout":
-                    st.warning("Workflow ancora in corso. Ricarica tra un minuto.")
-                else:
-                    st.error(f'Errore workflow: {result["conclusion"]}')
-            except Exception as exc:
-                if _github_auth_unavailable(exc):
-                    try:
-                        with st.spinner(
-                            "GitHub non è disponibile: cerco le nuove partite "
-                            "direttamente. Attendi il messaggio conclusivo…"
-                        ):
-                            run_collector_directly()
-                        st.success(
-                            "✅ SESSIONE CONCLUSA — nuove partite controllate "
-                            "e archivio aggiornato."
-                        )
-                    except Exception as direct_exc:
-                        if "Mancano i Secrets necessari" in str(direct_exc):
-                            st.warning(
-                                "Il raccoglitore automatico sul server resta "
-                                "attivo e aggiorna le partite più volte al giorno. "
-                                "Il collegamento manuale GitHub deve essere "
-                                "rinnovato; l'archivio non è bloccato."
-                            )
-                        else:
-                            st.error(
-                                "Errore aggiornamento diretto delle partite: "
-                                f"{direct_exc}"
-                            )
-                else:
-                    st.error(f"Errore aggiornamento partite: {exc}")
-
-    with risultati_col:
-        if st.button(
-            "🏁 Aggiorna risultati e profitti",
-            use_container_width=True,
-        ):
-            try:
-                if not github_configured():
-                    raise RuntimeError(
-                        "GitHub 401: configurazione assente o non valida."
-                    )
-                previous_run = latest_named_workflow_run("results-update.yml")
-                trigger_named_workflow("results-update.yml")
-                st.session_state["results_workflow_previous_id"] = (
-                    previous_run.get("id") if previous_run else None
-                )
-                st.session_state["results_workflow_started_at"] = time.time()
-                st.rerun()
-            except Exception as exc:
-                if _github_auth_unavailable(exc):
-                    try:
-                        with st.spinner(
-                            "GitHub non è disponibile: aggiorno i risultati "
-                            "direttamente. Attendi il messaggio conclusivo…"
-                        ):
-                            run_results_update_directly()
-                        st.success(
-                            "✅ SESSIONE CONCLUSA — risultati e profitti "
-                            "aggiornati direttamente."
-                        )
-                    except Exception as direct_exc:
-                        st.error(
-                            "Errore aggiornamento diretto dei risultati: "
-                            f"{direct_exc}"
-                        )
-                else:
-                    st.error(f"Errore aggiornamento risultati: {exc}")
-
-    with refresh_col:
-        if st.button("↻ Ricarica", use_container_width=True):
-            st.rerun()
-
-    show_results_workflow_status()
-
-    st.caption(
-        "La quota current_odds viene congelata al primo inserimento. "
-        "Puntata fissa: 20 €."
+    st.markdown(
+        """
+        <style>
+        .s4b-home-hero {
+            padding: 1.25rem 1.3rem;
+            margin: .15rem 0 1rem;
+            border: 1px solid rgba(65, 145, 116, .32);
+            border-radius: 1.1rem;
+            background: linear-gradient(105deg, rgba(46, 150, 113, .14),
+                rgba(71, 113, 164, .07));
+        }
+        .s4b-home-hero p { margin: 0; }
+        .s4b-home-hero h1 { margin: 0; padding: .15rem 0 .35rem;
+            font-size: clamp(1.9rem, 6vw, 2.7rem); line-height: 1.15; }
+        .s4b-home-kicker { font-size: .78rem; font-weight: 650;
+            letter-spacing: .09em; text-transform: uppercase; }
+        </style>
+        <section class="s4b-home-hero" aria-label="Stats4Bets">
+            <p class="s4b-home-kicker">Il tuo cruscotto</p>
+            <h1>Stats4Bets</h1>
+            <p>Partite, strategia e risultati in un unico posto.</p>
+        </section>
+        """,
+        unsafe_allow_html=True,
     )
-    c1,c2,c3 = st.columns(3)
-    c1.info("➕ Carica screenshot/PDF e salva la partita")
-    c2.info("🏆 Aggiorna risultato, ritorno e profitto")
-    c3.info("🥇 Cerca i filtri e le combinazioni migliori")
+    stats4bets_home_shortcuts()
+
+    st.subheader("Riepilogo")
     df = get_matches()
     s = summary(df)
+    profit_col, roi_col = st.columns(2)
+    profit_col.metric("Profitto", f'€ {s["profit"]:.2f}')
+    roi_col.metric("ROI", f'{s["roi"]:.2f}%')
 
-    metrics = st.columns(4)
-    metrics[0].metric("🟢 Vinte", s["wins"])
-    metrics[1].metric("🔴 Perse", s["losses"])
-    metrics[2].metric("💰 Profitto", f'€ {s["profit"]:.2f}')
-    metrics[3].metric("📈 ROI", f'{s["roi"]:.2f}%')
+    with st.expander("Altre statistiche"):
+        win_col, loss_col = st.columns(2)
+        win_col.metric("Vinte", s["wins"])
+        loss_col.metric("Perse", s["losses"])
+        st.metric(
+            "Utile medio per giocata", f'€ {s["avg_profit_per_bet"]:.2f}',
+            help="Profitto totale diviso per il numero di partite concluse.",
+        )
+        st.metric(
+            "Rendimento medio sulla puntata",
+            f'{s["avg_profit_per_bet_pct"]:.2f}% su € {s["avg_stake"]:.2f}',
+            help="Utile medio per giocata in percentuale sulla puntata media.",
+        )
+    with st.expander("↻ Aggiornamenti manuali", expanded=False):
+        st.caption(f"Le raccolte sono programmate. Archivio: {storage_label()}.")
+        st.caption("La quota viene bloccata al primo salvataggio. Puntata fissa: 20 €.")
+        partite_col, risultati_col, refresh_col = st.columns([2, 2, 1])
 
-    avg_metrics = st.columns(2)
-    avg_metrics[0].metric(
-        "Utile medio per giocata",
-        f'€ {s["avg_profit_per_bet"]:.2f}',
-        help="Profitto totale diviso per il numero di partite concluse.",
-    )
-    avg_metrics[1].metric(
-        "Rendimento medio sulla puntata",
-        f'{s["avg_profit_per_bet_pct"]:.2f}% su € {s["avg_stake"]:.2f}',
-        help="Utile medio per giocata in percentuale sulla puntata media.",
-    )
+        with partite_col:
+            if st.button(
+                "🔄 Aggiorna partite",
+                type="primary",
+                use_container_width=True,
+            ):
+                try:
+                    if not github_configured():
+                        raise RuntimeError(
+                            "GitHub 401: configurazione assente o non valida."
+                        )
+                    previous_run = latest_collector_run()
+                    previous_run_id = previous_run.get("id") if previous_run else None
+                    trigger_collector_workflow()
+                    st.success("Raccolta partite avviata.")
+                    with st.spinner("Attendi circa 1-2 minuti..."):
+                        result = wait_for_collector(
+                            previous_run_id=previous_run_id
+                        )
+
+                    if result["ok"]:
+                        st.success("✅ SESSIONE CONCLUSA — partite aggiornate.")
+                        time.sleep(1)
+                        st.rerun()
+                    elif result["conclusion"] == "timeout":
+                        st.warning("Workflow ancora in corso. Ricarica tra un minuto.")
+                    else:
+                        st.error(f'Errore workflow: {result["conclusion"]}')
+                except Exception as exc:
+                    if _github_auth_unavailable(exc):
+                        try:
+                            with st.spinner(
+                                "GitHub non è disponibile: cerco le nuove partite "
+                                "direttamente. Attendi il messaggio conclusivo…"
+                            ):
+                                run_collector_directly()
+                            st.success(
+                                "✅ SESSIONE CONCLUSA — nuove partite controllate "
+                                "e archivio aggiornato."
+                            )
+                        except Exception as direct_exc:
+                            if "Mancano i Secrets necessari" in str(direct_exc):
+                                st.warning(
+                                    "Il raccoglitore automatico sul server resta "
+                                    "attivo e aggiorna le partite più volte al giorno. "
+                                    "Il collegamento manuale GitHub deve essere "
+                                    "rinnovato; l'archivio non è bloccato."
+                                )
+                            else:
+                                st.error(
+                                    "Errore aggiornamento diretto delle partite: "
+                                    f"{direct_exc}"
+                                )
+                    else:
+                        st.error(f"Errore aggiornamento partite: {exc}")
+
+        with risultati_col:
+            if st.button(
+                "🏁 Aggiorna risultati e profitti",
+                use_container_width=True,
+            ):
+                try:
+                    if not github_configured():
+                        raise RuntimeError(
+                            "GitHub 401: configurazione assente o non valida."
+                        )
+                    previous_run = latest_named_workflow_run("results-update.yml")
+                    trigger_named_workflow("results-update.yml")
+                    st.session_state["results_workflow_previous_id"] = (
+                        previous_run.get("id") if previous_run else None
+                    )
+                    st.session_state["results_workflow_started_at"] = time.time()
+                    st.rerun()
+                except Exception as exc:
+                    if _github_auth_unavailable(exc):
+                        try:
+                            with st.spinner(
+                                "GitHub non è disponibile: aggiorno i risultati "
+                                "direttamente. Attendi il messaggio conclusivo…"
+                            ):
+                                run_results_update_directly()
+                            st.success(
+                                "✅ SESSIONE CONCLUSA — risultati e profitti "
+                                "aggiornati direttamente."
+                            )
+                        except Exception as direct_exc:
+                            st.error(
+                                "Errore aggiornamento diretto dei risultati: "
+                                f"{direct_exc}"
+                            )
+                    else:
+                        st.error(f"Errore aggiornamento risultati: {exc}")
+
+        with refresh_col:
+            if st.button("↻ Ricarica", use_container_width=True):
+                st.rerun()
+
+    show_results_workflow_status()
 
     st.markdown("### Ultime partite")
     if df.empty:
