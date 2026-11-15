@@ -5667,6 +5667,28 @@ elif page == "🧪 Laboratorio Strategie":
 
 elif page == "🧠 Trova metodo migliore":
     s4b_section_header("Elite", "elite")
+    elite_update = st.empty()
+    scheduled_result = load_scheduled_strategy_result()
+
+    def elite_update_text(view_timestamp, automatic_timestamp):
+        from zoneinfo import ZoneInfo
+
+        for raw, label in (
+            (view_timestamp, "Ultimo aggiornamento Elite"),
+            (automatic_timestamp, "Ultimo ricalcolo automatico Elite"),
+        ):
+            if not raw:
+                continue
+            try:
+                value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                if value.tzinfo is not None:
+                    local = value.astimezone(ZoneInfo("Europe/Rome"))
+                    return f"{label}: {local:%d/%m alle %H:%M}"
+            except (ValueError, TypeError, AttributeError):
+                continue
+        return "Ultimo aggiornamento Elite: non disponibile"
+
+    automatic_elite_timestamp = (scheduled_result or {}).get("generated_at")
     st.subheader("🏆 Strategie — decisione rapida")
     st.caption(
         "Qui trovi soltanto ciò che serve per decidere: stato della strategia "
@@ -5678,6 +5700,7 @@ elif page == "🧠 Trova metodo migliore":
     closed = df[df["outcome"].isin(["V", "P"])].copy() if not df.empty else df
 
     if closed.empty:
+        elite_update.caption(elite_update_text(None, automatic_elite_timestamp))
         st.info("Servono partite concluse per cercare strategie.")
     else:
         default_min = min(10, max(1, len(closed)))
@@ -5730,7 +5753,6 @@ elif page == "🧠 Trova metodo migliore":
             validation_ratio=float(validation_pct) / 100.0,
         )
 
-        scheduled_result = load_scheduled_strategy_result()
         if scheduled_result is not None:
             scheduled_ranking = scheduled_result["ranking"]
             scheduled_signature = scheduled_result["engine_signature"]
@@ -5757,6 +5779,7 @@ elif page == "🧠 Trova metodo migliore":
                 st.session_state[
                     "strategy_engine_signature_v3"
                 ] = scheduled_signature
+                st.session_state["strategy_ranking_updated_at"] = automatic_elite_timestamp
                 scheduled_key = (
                     f"{scheduled_signature}:"
                     f"{scheduled_result['generated_at']}"
@@ -5796,6 +5819,8 @@ elif page == "🧠 Trova metodo migliore":
             st.session_state[
                 "strategy_engine_signature_v3"
             ] = background_signature
+            if not background_error and not background_ranking.empty:
+                st.session_state["strategy_ranking_updated_at"] = background_finished_at
             st.session_state[
                 "strategy_history_result"
             ] = save_strategy_snapshot(background_ranking)
@@ -5813,6 +5838,13 @@ elif page == "🧠 Trova metodo migliore":
                     "✅ Ricerca strategie conclusa. "
                     "La nuova Classifica Elite è pronta."
                 )
+
+        shown_elite_timestamp = (
+            st.session_state.get("strategy_ranking_updated_at")
+            if st.session_state.get("strategy_engine_signature_v3") == current_engine_signature
+            else None
+        )
+        elite_update.caption(elite_update_text(shown_elite_timestamp, automatic_elite_timestamp))
 
         previous_engine_signature = st.session_state.get(
             "strategy_engine_signature_v3"
