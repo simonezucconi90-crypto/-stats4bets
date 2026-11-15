@@ -4098,6 +4098,17 @@ st.markdown(
     .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
         padding-bottom:calc(6rem + env(safe-area-inset-bottom, 0px)) !important;
     }
+    /* Streamlit Cloud's Manage app control sits at the viewport bottom. */
+    @media (max-width: 1100px) {
+        .st-key-s4b_bottom {
+            bottom:calc(3.5rem + env(safe-area-inset-bottom, 0px));
+            padding-bottom:.42rem;
+            border-radius:1rem;
+        }
+        .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
+            padding-bottom:calc(9.5rem + env(safe-area-inset-bottom, 0px)) !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
