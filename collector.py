@@ -112,41 +112,13 @@ def date_to_iso(value):
     return f"20{year}-{month}-{day}"
 
 
-ROME = ZoneInfo("Europe/Rome")
-WINDOW_STARTS = (10, 6 * 60 + 10, 12 * 60 + 10, 18 * 60 + 10)
-
-
-def collection_window(now):
-    local = now.astimezone(ROME)
-    minute = local.hour * 60 + local.minute
-    starts = [start for start in WINDOW_STARTS if start <= minute]
-    if not starts:
-        return None
-    start = starts[-1]
-    end = next((value for value in WINDOW_STARTS if value > start), 24 * 60)
-    return (local.date().isoformat(), start, end)
-
-
-def eligible_kickoff(date_iso, time_text, window, now):
-    if window is None:
-        return False
-    day, start, end = window
-    local = now.astimezone(ROME)
-    if date_iso != day or local.date().isoformat() != day:
-        return False
-    match = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?", time_text)
-    if not match:
-        return False
-    minute = int(match[1]) * 60 + int(match[2])
-    return start <= minute < end and minute > local.hour * 60 + local.minute
-
-
-def parse_list(html, window, now):
+def parse_list(html):
     soup = BeautifulSoup(html, "html.parser")
     grid = soup.select_one("div.grid.lg\\:hidden.grid-cols-1.gap-6.mb-6")
     if grid is None:
         raise RuntimeError("Griglia partite non trovata.")
 
+    today = datetime.now(ZoneInfo("Europe/Rome")).strftime("%Y-%m-%d")
     rows, seen = [], set()
 
     for card in grid.find_all("div", recursive=False):
@@ -181,9 +153,7 @@ def parse_list(html, window, now):
         detail_link = card.select_one('a[href*="statistiche.php?id="]')
         detail_url = urljoin(TARGET_URL, detail_link.get("href")) if detail_link else ""
 
-        if prediction.casefold() != "ottimo 1" or not eligible_kickoff(
-            date_iso, time_text, window, now
-        ):
+        if date_iso != today or prediction.casefold() != "ottimo 1":
             continue
 
         seen.add(source_id)
@@ -335,7 +305,7 @@ def load_internal_ids(client):
     return ids
 
 
-def save_to_supabase(records, window):
+def save_to_supabase(records):
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
     inserted = 0
     updated = 0
@@ -349,8 +319,6 @@ def save_to_supabase(records, window):
     next_number = (max(numeric_ids) if numeric_ids else 0) + 1
 
     for record in records:
-        if not eligible_kickoff(record["date"], record["time"], window, datetime.now(ROME)):
-            continue
         source_id = record["source_match_id"]
         existing = (
             client.table("matches")
@@ -392,13 +360,6 @@ def save_to_supabase(records, window):
 
 
 def main():
-    window = collection_window(datetime.now(ROME))
-    if window is None:
-        print("Completato: nessuna fascia attiva prima delle 00:10.")
-        return
-    day, start, end = window
-    print(f"Fascia {day} (Europe/Rome): {start // 60:02d}:{start % 60:02d}"
-          f"–{end // 60:02d}:{end % 60:02d} (fine esclusa).")
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         context = browser.new_context(
@@ -418,22 +379,24 @@ def main():
         if page.locator('input[type="password"]').count() > 0:
             raise RuntimeError("Login non riuscito.")
 
-        matches = parse_list(page.content(), window, datetime.now(ROME))
+        matches = parse_list(page.content())
         if not matches:
-            print("Completato: nessuna partita Ottimo 1 non iniziata nella fascia.")
+            today_rome = datetime.now(ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y")
+            print(
+                f"Completato: nessuna nuova partita Ottimo 1 disponibile "
+                f"per il {today_rome}."
+            )
             browser.close()
             return
 
         records = []
         for index, match in enumerate(matches, 1):
-            if not eligible_kickoff(match["date"], match["time"], window, datetime.now(ROME)):
-                continue
             print(f'[{index}/{len(matches)}] {match["match_name"]}')
             page.goto(match["detail_url"], wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
             records.append(parse_detail(page.content(), match))
 
-        inserted, updated = save_to_supabase(records, window)
+        inserted, updated = save_to_supabase(records)
         print(f"Completato: {inserted} nuove, {updated} già presenti e non modificate.")
         browser.close()
 
