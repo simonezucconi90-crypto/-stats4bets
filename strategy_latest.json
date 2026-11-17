@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-11-17T04:10:25.717728+00:00",
+  "generated_at": "2026-11-17T14:52:56.697654+00:00",
   "engine_signature": "1b53187f6b9b87a639f779e29cf17097e6593b99d288b070a4264c5963feaf37",
   "closed_matches": 1301,
   "snapshot_count": 169,
   "history_result": {
     "ok": true,
-    "saved": true,
-    "message": "Nuovo snapshot salvato: 50 strategie."
+    "saved": false,
+    "message": "Classifica invariata: snapshot non duplicato."
   },
-  "follow_message": "Nessuno sfidante ha prove sufficienti: continua con l'Elite attuale.",
+  "follow_message": "Nessun dato nuovo: stato Elite invariato.",
   "operational_label": "✅ DA SEGUIRE",
   "ranking": [
     {
