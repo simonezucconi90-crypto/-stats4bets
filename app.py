@@ -9,6 +9,7 @@ import math
 import re
 import hashlib
 from datetime import datetime, timezone
+from html import escape
 from itertools import combinations
 
 import pandas as pd
@@ -4053,107 +4054,166 @@ active_section = S4B_MAIN_IDS.get(page, "altro")
 st.markdown(
     """
     <style>
-    .s4b-brand { color:#8eacc2; font-size:1rem; font-weight:760;
-        letter-spacing:.02em; padding:.15rem 0 .25rem; }
-    .s4b-brand b { color:#35a982; }
-    .s4b-section { margin:.3rem 0 1rem; padding:.8rem 1rem .85rem;
-        border-inline-start:4px solid var(--s4b-accent);
-        border-radius:.75rem; background:var(--s4b-tint); }
-    .s4b-section h1 { margin:0; padding:0; font-size:clamp(1.9rem,6vw,2.6rem); }
-    .s4b-section--oggi { --s4b-accent:#48c69c; --s4b-tint:rgba(72,198,156,.12); }
-    .s4b-section--elite { --s4b-accent:#e8ad50; --s4b-tint:rgba(232,173,80,.14); }
-    .s4b-section--analisi { --s4b-accent:#56a2f0; --s4b-tint:rgba(86,162,240,.13); }
-    .s4b-section--altro { --s4b-accent:#a680ed; --s4b-tint:rgba(166,128,237,.13); }
-    .st-key-s4b_bottom {
-        position:fixed; z-index:99; bottom:0; left:50%; transform:translateX(-50%);
-        width:min(100%, 45rem) !important; max-width:45rem;
-        padding:.42rem .5rem calc(.42rem + env(safe-area-inset-bottom, 0px));
-        background:var(--background-color, Canvas);
-        border:1px solid rgba(128,140,154,.33);
-        border-radius:1rem 1rem 0 0;
-        box-shadow:0 -.4rem 1.6rem rgba(0,0,0,.12);
+    .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
+        max-width:74rem;
+        padding-top:3.65rem;
+        padding-bottom:calc(5rem + env(safe-area-inset-bottom, 0px));
     }
-    .st-key-s4b_bottom [data-testid="stHorizontalBlock"] {
-        flex-wrap:nowrap !important; gap:.3rem !important;
+    .s4b-masthead {
+        display:flex; align-items:center; justify-content:space-between;
+        gap:.65rem; color:#152f27;
     }
-    .st-key-s4b_bottom [data-testid="stColumn"] {
+    .s4b-brand {
+        display:flex; align-items:center; gap:.55rem;
+        font-size:1.22rem; font-weight:760; letter-spacing:-.045em;
+    }
+    .s4b-logo {
+        width:2.15rem; height:2.15rem; display:grid; place-items:center;
+        border-radius:.65rem; background:#153b2e; color:#c9ee9c; flex:none;
+    }
+    .s4b-tag {
+        background:#e5eee5; color:#226148; border-radius:999px;
+        padding:.27rem .65rem; font-size:.73rem; font-weight:700;
+        white-space:nowrap;
+    }
+    .st-key-s4b_navigation {
+        border-bottom:1px solid #d8ded4;
+    }
+    .st-key-s4b_navigation [data-testid="stHorizontalBlock"] {
+        flex-wrap:nowrap !important; gap:.25rem !important;
+    }
+    .st-key-s4b_navigation [data-testid="stColumn"] {
         flex:1 1 0 !important; min-width:0 !important; width:auto !important;
     }
-    .st-key-s4b_bottom button {
-        padding:.25rem .1rem; min-height:3rem; border-radius:.65rem;
-        border-color:transparent; background:transparent;
+    .st-key-s4b_navigation button {
+        padding:.38rem .08rem; min-height:2.8rem; border-radius:0;
+        border:0; border-bottom:2px solid transparent;
+        background:transparent; color:#4f6259; font-weight:650;
+        white-space:nowrap;
     }
-    .st-key-s4b_bottom button p { font-size:clamp(.75rem, 3.4vw, .95rem); }
-    .st-key-s4b_nav_oggi { --nav:#309c79; --nav-bg:rgba(72,198,156,.20); }
-    .st-key-s4b_nav_elite { --nav:#b47a22; --nav-bg:rgba(232,173,80,.23); }
-    .st-key-s4b_nav_analisi { --nav:#3b83c8; --nav-bg:rgba(86,162,240,.21); }
-    .st-key-s4b_nav_altro { --nav:#8d64cb; --nav-bg:rgba(166,128,237,.22); }
-    .st-key-s4b_bottom button[kind="primary"] {
-        color:var(--text-color, CanvasText); background:var(--nav-bg);
-        border-color:var(--nav); font-weight:750;
+    .st-key-s4b_navigation button p { font-size:clamp(.76rem, 3.45vw, .94rem); }
+    .st-key-s4b_navigation button:hover {
+        border-bottom-color:#7fae92; color:#183c2d; background:#e8efe7;
     }
-    .st-key-s4b_match_list [data-testid="stVerticalBlockBorderWrapper"] {
-        border-inline-start-color:#48c69c;
+    .st-key-s4b_navigation button[kind="primary"],
+    .st-key-s4b_navigation button[data-testid="stBaseButton-primary"] {
+        background:transparent; color:#17382b; border-bottom-color:#1b7253;
+        font-weight:760;
     }
-    .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
-        padding-bottom:calc(6rem + env(safe-area-inset-bottom, 0px)) !important;
+    .st-key-s4b_navigation button:focus-visible {
+        outline:2px solid #1b7253; outline-offset:-2px;
     }
-    /* Keep the Cloud control reachable without showing scrolling content below the dock. */
-    @media (max-width: 1100px) {
-        .st-key-s4b_bottom {
-            --s4b-cloud-space:calc(3.5rem + env(safe-area-inset-bottom, 0px));
-            bottom:var(--s4b-cloud-space);
-            padding-bottom:.42rem;
-            border-radius:1rem 1rem 0 0;
-        }
-        .st-key-s4b_bottom::after {
-            content:"";
-            position:absolute;
-            top:calc(100% - 1px);
-            left:50%;
-            width:100vw;
-            height:calc(var(--s4b-cloud-space) + 3px);
-            transform:translateX(-50%);
-            background:var(--background-color, Canvas);
-            z-index:-1;
-            pointer-events:none;
-        }
+    .s4b-section {
+        --s4b-highlight:#caef9f;
+        display:block; padding:clamp(1.15rem, 3.25vw, 2.1rem);
+        border-radius:1.25rem;
+        background:linear-gradient(120deg,#163a2e,#204b3a);
+        color:#f5f9ed;
+    }
+    .s4b-section--elite { --s4b-highlight:#f5d99b; }
+    .s4b-section--analisi { --s4b-highlight:#c8e6f3; }
+    .s4b-section--altro { --s4b-highlight:#e3d4f3; }
+    .s4b-kicker {
+        display:inline-block; margin-bottom:.55rem; font-size:.72rem;
+        font-weight:720; letter-spacing:.045em; color:var(--s4b-highlight);
+        background:rgba(255,255,255,.10); border-radius:999px; padding:.28rem .65rem;
+    }
+    .s4b-section h1 {
+        margin:0; padding:0; font-size:clamp(1.82rem, 6vw, 3.4rem);
+        line-height:1.06; font-weight:780; letter-spacing:-.055em; color:#f5f9ed;
+    }
+    .s4b-section p {
+        margin:.56rem 0 0; color:#dfebe3; line-height:1.4; font-size:.9rem;
+    }
+    .s4b-section .s4b-section-note { color:#cde2d4; font-size:.78rem; }
+    [data-testid="stMetric"] {
+        border:1px solid #dce2d8; background:#fffdfa; border-radius:1rem;
+        padding:.7rem .95rem; color:#162f26;
+    }
+    [data-testid="stMetric"] [data-testid="stMetricLabel"] { color:#4d6155; }
+    [data-testid="stMetric"] [data-testid="stMetricValue"] {
+        color:#162f26; font-weight:740; letter-spacing:-.04em;
+        font-variant-numeric:tabular-nums;
+    }
+    .st-key-s4b_overview [data-testid="stVerticalBlockBorderWrapper"],
+    .st-key-s4b_overview[data-testid="stVerticalBlockBorderWrapper"],
+    .st-key-s4b_tools [data-testid="stVerticalBlockBorderWrapper"] {
+        background:#fffdfa; border-color:#dce2d8; border-radius:1rem;
+    }
+    .s4b-match {
+        display:grid; grid-template-columns:minmax(0,1fr) auto;
+        gap:.5rem .8rem; align-items:center;
+        padding:.82rem .95rem; background:#fffdfa; color:#162f26;
+        border:1px solid #dce2d8; border-radius:1rem;
+    }
+    .s4b-match strong { display:block; line-height:1.3; overflow-wrap:anywhere; }
+    .s4b-match-meta {
+        color:#53675a; margin-top:.25rem; font-size:.8rem; overflow-wrap:anywhere;
+    }
+    .s4b-match-odds {
+        min-width:3.4rem; text-align:center; font-weight:750; color:#1c5b42;
+        background:#e5eee5; padding:.3rem .5rem; border-radius:.6rem;
+        font-variant-numeric:tabular-nums;
+    }
+    .s4b-match-odds small { display:block; font-weight:550; font-size:.65rem; }
+    @media (max-width:640px) {
         .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
-            padding-top:3.65rem !important;
-            padding-bottom:calc(9.5rem + env(safe-area-inset-bottom, 0px)) !important;
+            padding-top:3.15rem !important; padding-inline:.9rem !important;
         }
-        .s4b-section {
-            margin:.12rem 0 .35rem;
-            padding:.56rem .85rem;
-        }
+        .s4b-section { border-radius:1.05rem; }
+        .s4b-section p { font-size:.85rem; }
+        .s4b-section .s4b-section-note { font-size:.76rem; }
+    }
+    @media (max-width:360px) {
+        .st-key-s4b_navigation button [data-testid="stIconMaterial"] { display:none; }
     }
     </style>
+    <div class="s4b-masthead">
+      <div class="s4b-brand">
+        <span class="s4b-logo" aria-hidden="true">
+          <svg viewBox="0 0 20 20" width="19" height="19" fill="currentColor">
+            <rect x="3" y="11" width="3" height="6" rx="1"></rect>
+            <rect x="8.5" y="7" width="3" height="10" rx="1"></rect>
+            <rect x="14" y="3" width="3" height="14" rx="1"></rect>
+          </svg>
+        </span>
+        <span>Stats4Bets</span>
+      </div>
+      <span class="s4b-tag">Analisi calcio</span>
+    </div>
     """,
     unsafe_allow_html=True,
 )
 
-with st.container(key="s4b_bottom"):
+with st.container(key="s4b_navigation"):
     for col, (label, destination, section, icon) in zip(st.columns(4), S4B_MAIN):
         with col:
-            with st.container(key=f"s4b_nav_{section}"):
-                st.button(
-                    f":material/{icon}: {label}",
-                    key=f"s4b_tab_{section}",
-                    type="primary" if section == active_section else "secondary",
-                    on_click=open_stats4bets_page,
-                    args=(destination,),
-                    use_container_width=True,
-                )
+            st.button(
+                f":material/{icon}: {label}",
+                key=f"s4b_tab_{section}",
+                type="primary" if section == active_section else "secondary",
+                on_click=open_stats4bets_page,
+                args=(destination,),
+                use_container_width=True,
+            )
 
-st.markdown('<div class="s4b-brand">Stats<b>4</b>Bets</div>', unsafe_allow_html=True)
+S4B_SECTION_COPY = {
+    "oggi": ("Oggi", "Proposte della strategia ufficiale e filtri manuali."),
+    "elite": ("Strategia ufficiale", "Stato della strategia, classifica e andamento."),
+    "analisi": ("Analisi", "Risultati, rendimento e andamento mensile."),
+    "altro": ("Strumenti", "Archivio, aggiornamenti e impostazioni."),
+}
 
 
-def s4b_section_header(title, section):
+def s4b_section_header(title, section, note=""):
+    kicker, subtitle = S4B_SECTION_COPY[section]
+    metadata = f'<p class="s4b-section-note">{escape(note)}</p>' if note else ""
     st.markdown(
-        f'<section class="s4b-section s4b-section--{section}"><h1>{title}</h1></section>',
+        f'<section class="s4b-section s4b-section--{section}">'
+        f'<span class="s4b-kicker">{kicker}</span>'
+        f'<h1>{escape(title)}</h1><p>{subtitle}</p>{metadata}</section>',
         unsafe_allow_html=True,
     )
-
 
 @st.cache_resource
 def s4b_collector_last_known():
@@ -4232,16 +4292,18 @@ def s4b_collector_update_label(completed_at):
 
 if page == "Altro":
     s4b_section_header("Altro", "altro")
-    for heading, entries in S4B_GROUPS:
-        st.markdown(f"#### {heading}")
-        for label, destination in entries:
-            st.button(
-                f"{label}   ›",
-                key=f"s4b_more_{destination}",
-                on_click=open_stats4bets_page,
-                args=(destination,),
-                use_container_width=True,
-            )
+    with st.container(key="s4b_tools"):
+        for heading, entries in S4B_GROUPS:
+            with st.container(border=True):
+                st.markdown(f"#### {heading}")
+                for label, destination in entries:
+                    st.button(
+                        f"{label}   ›",
+                        key=f"s4b_more_{destination}",
+                        on_click=open_stats4bets_page,
+                        args=(destination,),
+                        use_container_width=True,
+                    )
 
 elif page == "⚡ Inserimento rapido":
     st.subheader("⚡ Inserimento rapido")
@@ -4569,10 +4631,10 @@ elif page == "📅 Analisi mensile":
 
 
 elif page == "🎯 Partite da giocare":
-    s4b_section_header("Oggi", "oggi")
-    st.caption(s4b_collector_update_label(s4b_last_collector_completion()))
-    st.subheader("Partite da giocare")
-    st.caption("Proposte della strategia ufficiale e ricerca con filtri manuali.")
+    s4b_section_header(
+        "Partite da giocare", "oggi",
+        note=s4b_collector_update_label(s4b_last_collector_completion()),
+    )
 
     df = get_matches()
 
@@ -4656,9 +4718,10 @@ elif page == "🎯 Partite da giocare":
         else:
             auto = apply_generated_strategy_name(pending, official)
 
-            st.metric("Proposte compatibili", len(auto))
-            st.caption("Strategia: " + human_strategy_name(official))
-            st.caption("Quote e indicatori rilevati al primo salvataggio, non in tempo reale.")
+            with st.container(key="s4b_overview"):
+                st.metric("Proposte compatibili", len(auto))
+                st.caption("Strategia: " + human_strategy_name(official))
+                st.caption("Quote e indicatori al primo salvataggio, non in tempo reale.")
 
             if auto.empty:
                 st.info(
@@ -4704,18 +4767,23 @@ elif page == "🎯 Partite da giocare":
                 )
                 with st.container(key="s4b_match_list"):
                     for _, row in show.head(8).iterrows():
-                        with st.container(border=True):
-                            match_name = str(row.get("Partita") or "Partita")
-                            st.write(match_name)
-                            date_value = pd.to_datetime(row.get("Data"), errors="coerce")
-                            date_label = date_value.strftime("%d/%m") if pd.notna(date_value) else "–"
-                            time_label = row.get("Ora", "")
-                            league = row.get("Campionato", "")
-                            quote = row.get("Quota")
-                            quote_label = f"{quote:.2f}" if pd.notna(quote) else "–"
-                            st.caption(f"{date_label} · {time_label} · Quota {quote_label}")
-                            if league:
-                                st.caption(str(league))
+                        match_name = str(row.get("Partita") or "Partita")
+                        date_value = pd.to_datetime(row.get("Data"), errors="coerce")
+                        date_label = date_value.strftime("%d/%m") if pd.notna(date_value) else "–"
+                        time_label = row.get("Ora", "")
+                        league = row.get("Campionato", "")
+                        quote = row.get("Quota")
+                        quote_label = f"{quote:.2f}" if pd.notna(quote) else "–"
+                        meta = " · ".join(
+                            str(item) for item in (date_label, time_label, league)
+                            if pd.notna(item) and str(item).strip()
+                        )
+                        st.markdown(
+                            f'<article class="s4b-match"><div><strong>{escape(match_name)}</strong>'
+                            f'<div class="s4b-match-meta">{escape(meta)}</div></div>'
+                            f'<div class="s4b-match-odds"><small>Quota</small>{quote_label}</div></article>',
+                            unsafe_allow_html=True,
+                        )
 
                 details_label = "Tabella completa e indicatori"
                 if len(show) > 8:
@@ -5718,13 +5786,6 @@ elif page == "🧠 Trova metodo migliore":
         return "Ultimo aggiornamento Elite: non disponibile"
 
     automatic_elite_timestamp = (scheduled_result or {}).get("generated_at")
-    st.subheader("🏆 Strategie — decisione rapida")
-    st.caption(
-        "Qui trovi soltanto ciò che serve per decidere: stato della strategia "
-        "ufficiale, Classifica Elite e grafico. Tutte le verifiche tecniche "
-        "restano disponibili nella sezione avanzata."
-    )
-
     df = get_matches()
     closed = df[df["outcome"].isin(["V", "P"])].copy() if not df.empty else df
 
