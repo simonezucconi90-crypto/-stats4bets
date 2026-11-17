@@ -4155,42 +4155,71 @@ def s4b_section_header(title, section):
     )
 
 
-@st.cache_data(ttl=180, show_spinner=False)
+@st.cache_resource
+def s4b_collector_last_known():
+    return {}
+
+
+@st.cache_data(ttl=60, show_spinner=False)
 def s4b_last_collector_completion():
-    """Show completion of an actual collection, not a skipped scheduler check."""
+    """Prefer the persisted success marker; use Actions as a fallback."""
     owner = secret("GITHUB_OWNER", "simonezucconi90-crypto") or "simonezucconi90-crypto"
     repo = secret("GITHUB_REPO", "-stats4bets") or "-stats4bets"
+    key = (owner, repo)
+    last_known = s4b_collector_last_known()
     base_url = f"https://api.github.com/repos/{owner}/{repo}/actions"
-    header_options = []
-    if secret("GITHUB_TOKEN"):
-        header_options.append(github_headers())
-    header_options.append({"Accept": "application/vnd.github+json"})
+    status_url = f"https://raw.githubusercontent.com/{owner}/{repo}/collector-status/collector-status.json"
+    public_headers = {"Accept": "application/vnd.github+json"}
 
-    def get(path, headers, params=None):
-        response = requests.get(
-            base_url + path, headers=headers, params=params, timeout=(2, 3)
-        )
+    def parse_timestamp(value):
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.utcoffset() is None or dt > datetime.now(timezone.utc):
+            raise ValueError("Invalid collector timestamp")
+        return dt
+
+    def remember(value):
+        dt = parse_timestamp(value)
+        latest = max(last_known.get(key, dt), dt)
+        last_known[key] = latest
+        return latest
+
+    def get(url, headers=None, params=None):
+        response = requests.get(url, headers=headers, params=params, timeout=(2, 3))
         response.raise_for_status()
         return response.json()
 
+    try:
+        marker = get(status_url)
+        if marker.get("run_id") and marker.get("completed_at"):
+            return remember(marker["completed_at"])
+    except (requests.RequestException, ValueError, TypeError, AttributeError, KeyError):
+        pass
+
+    header_options = [public_headers]
+    if secret("GITHUB_TOKEN"):
+        header_options.append(github_headers())
     for headers in header_options:
         try:
-            runs = get("/workflows/collect.yml/runs", headers, {
+            runs = get(f"{base_url}/workflows/collect.yml/runs", headers, {
                 "branch": "main", "status": "success", "per_page": 12,
             }).get("workflow_runs", [])
-            for run in runs:
-                if run.get("status") != "completed" or run.get("conclusion") != "success":
-                    continue
-                jobs = get(f"/runs/{int(run['id'])}/jobs", headers).get("jobs", [])
+        except (requests.RequestException, ValueError, TypeError, AttributeError, KeyError):
+            continue
+        for run in runs:
+            if run.get("status") != "completed" or run.get("conclusion") != "success":
+                continue
+            try:
+                jobs = get(f"{base_url}/runs/{int(run['id'])}/jobs", headers).get("jobs", [])
                 for job in jobs:
                     for step in job.get("steps", []):
                         if (step.get("name") == "Estrai e salva su Supabase"
                                 and step.get("conclusion") == "success"
                                 and step.get("completed_at")):
-                            return datetime.fromisoformat(step["completed_at"].replace("Z", "+00:00"))
-        except (requests.RequestException, ValueError, TypeError, AttributeError, KeyError):
-            continue
-    return None
+                            return remember(step["completed_at"])
+            except (requests.RequestException, ValueError, TypeError, AttributeError, KeyError):
+                continue
+    return last_known.get(key)
+
 
 def s4b_collector_update_label(completed_at):
     from zoneinfo import ZoneInfo
