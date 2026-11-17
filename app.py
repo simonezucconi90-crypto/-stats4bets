@@ -4056,12 +4056,13 @@ st.markdown(
     <style>
     .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
         max-width:74rem;
-        padding-top:3.65rem;
+        padding-top:calc(4.5rem + env(safe-area-inset-top, 0px)) !important;
         padding-bottom:calc(5rem + env(safe-area-inset-bottom, 0px));
     }
+    [data-testid="stHeader"] { background:#080908; }
     .s4b-masthead {
         display:flex; align-items:center; justify-content:space-between;
-        gap:.65rem; color:#152f27;
+        gap:.65rem; color:#f4f7f4;
     }
     .s4b-brand {
         display:flex; align-items:center; gap:.55rem;
@@ -4069,15 +4070,15 @@ st.markdown(
     }
     .s4b-logo {
         width:2.15rem; height:2.15rem; display:grid; place-items:center;
-        border-radius:.65rem; background:#153b2e; color:#c9ee9c; flex:none;
+        border-radius:.65rem; background:#164734; color:#c9ee9c; flex:none;
     }
     .s4b-tag {
-        background:#e5eee5; color:#226148; border-radius:999px;
+        background:#19352a; color:#a8e3bc; border-radius:999px;
         padding:.27rem .65rem; font-size:.73rem; font-weight:700;
         white-space:nowrap;
     }
     .st-key-s4b_navigation {
-        border-bottom:1px solid #d8ded4;
+        border-bottom:1px solid #303d37;
     }
     .st-key-s4b_navigation [data-testid="stHorizontalBlock"] {
         flex-wrap:nowrap !important; gap:.25rem !important;
@@ -4088,26 +4089,26 @@ st.markdown(
     .st-key-s4b_navigation button {
         padding:.38rem .08rem; min-height:2.8rem; border-radius:0;
         border:0; border-bottom:2px solid transparent;
-        background:transparent; color:#4f6259; font-weight:650;
+        background:transparent; color:#c3d0c9; font-weight:650;
         white-space:nowrap;
     }
     .st-key-s4b_navigation button p { font-size:clamp(.76rem, 3.45vw, .94rem); }
     .st-key-s4b_navigation button:hover {
-        border-bottom-color:#7fae92; color:#183c2d; background:#e8efe7;
+        border-bottom-color:#77c99b; color:#eef9f0; background:#152a20;
     }
     .st-key-s4b_navigation button[kind="primary"],
     .st-key-s4b_navigation button[data-testid="stBaseButton-primary"] {
-        background:transparent; color:#17382b; border-bottom-color:#1b7253;
+        background:transparent; color:#dbf6e2; border-bottom-color:#79d3a4;
         font-weight:760;
     }
     .st-key-s4b_navigation button:focus-visible {
-        outline:2px solid #1b7253; outline-offset:-2px;
+        outline:2px solid #79d3a4; outline-offset:-2px;
     }
     .s4b-section {
         --s4b-highlight:#caef9f;
         display:block; padding:clamp(1.15rem, 3.25vw, 2.1rem);
         border-radius:1.25rem;
-        background:linear-gradient(120deg,#163a2e,#204b3a);
+        background:linear-gradient(120deg,#112d22,#193d2e);
         color:#f5f9ed;
     }
     .s4b-section--elite { --s4b-highlight:#f5d99b; }
@@ -4127,38 +4128,39 @@ st.markdown(
     }
     .s4b-section .s4b-section-note { color:#cde2d4; font-size:.78rem; }
     [data-testid="stMetric"] {
-        border:1px solid #dce2d8; background:#fffdfa; border-radius:1rem;
-        padding:.7rem .95rem; color:#162f26;
+        border:1px solid #314038; background:#131815; border-radius:1rem;
+        padding:.7rem .95rem; color:#f0f6f1;
     }
-    [data-testid="stMetric"] [data-testid="stMetricLabel"] { color:#4d6155; }
+    [data-testid="stMetric"] [data-testid="stMetricLabel"] { color:#bbcbbf; }
     [data-testid="stMetric"] [data-testid="stMetricValue"] {
-        color:#162f26; font-weight:740; letter-spacing:-.04em;
+        color:#f0f6f1; font-weight:740; letter-spacing:-.04em;
         font-variant-numeric:tabular-nums;
     }
     .st-key-s4b_overview [data-testid="stVerticalBlockBorderWrapper"],
     .st-key-s4b_overview[data-testid="stVerticalBlockBorderWrapper"],
     .st-key-s4b_tools [data-testid="stVerticalBlockBorderWrapper"] {
-        background:#fffdfa; border-color:#dce2d8; border-radius:1rem;
+        background:#131815; border-color:#314038; border-radius:1rem;
     }
     .s4b-match {
         display:grid; grid-template-columns:minmax(0,1fr) auto;
         gap:.5rem .8rem; align-items:center;
-        padding:.82rem .95rem; background:#fffdfa; color:#162f26;
-        border:1px solid #dce2d8; border-radius:1rem;
+        padding:.82rem .95rem; background:#131815; color:#f0f6f1;
+        border:1px solid #314038; border-radius:1rem;
     }
     .s4b-match strong { display:block; line-height:1.3; overflow-wrap:anywhere; }
     .s4b-match-meta {
-        color:#53675a; margin-top:.25rem; font-size:.8rem; overflow-wrap:anywhere;
+        color:#bbcec0; margin-top:.25rem; font-size:.8rem; overflow-wrap:anywhere;
     }
     .s4b-match-odds {
-        min-width:3.4rem; text-align:center; font-weight:750; color:#1c5b42;
-        background:#e5eee5; padding:.3rem .5rem; border-radius:.6rem;
+        min-width:3.4rem; text-align:center; font-weight:750; color:#bcebc6;
+        background:#19352a; padding:.3rem .5rem; border-radius:.6rem;
         font-variant-numeric:tabular-nums;
     }
     .s4b-match-odds small { display:block; font-weight:550; font-size:.65rem; }
     @media (max-width:640px) {
         .stMainBlockContainer, [data-testid="stAppViewBlockContainer"] {
-            padding-top:3.15rem !important; padding-inline:.9rem !important;
+            padding-top:calc(4.6rem + env(safe-area-inset-top, 0px)) !important;
+            padding-inline:.9rem !important;
         }
         .s4b-section { border-radius:1.05rem; }
         .s4b-section p { font-size:.85rem; }
