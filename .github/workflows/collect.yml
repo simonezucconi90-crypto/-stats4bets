@@ -17,7 +17,7 @@ on:
       - .github/workflows/collect.yml
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: stats4bets-collect
@@ -30,6 +30,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -48,3 +50,47 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python collector.py
+
+      - name: Pubblica orario della raccolta completata
+        env:
+          COLLECTOR_STATUS_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          from datetime import datetime, timezone
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          branch = "collector-status"
+          url = os.environ["GITHUB_API_URL"] + "/repos/" + os.environ["GITHUB_REPOSITORY"] + "/contents/collector-status.json"
+          headers = {
+              "Authorization": "Bearer " + os.environ["COLLECTOR_STATUS_TOKEN"],
+              "Accept": "application/vnd.github+json",
+              "Content-Type": "application/json",
+          }
+
+          def request(address, data=None):
+              body = json.dumps(data).encode() if data is not None else None
+              method = "PUT" if data is not None else "GET"
+              with urlopen(Request(address, data=body, headers=headers, method=method), timeout=15) as response:
+                  return json.load(response)
+
+          status = {
+              "completed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+              "run_id": int(os.environ["GITHUB_RUN_ID"]),
+          }
+          payload = {
+              "message": "Record successful match collection",
+              "branch": branch,
+              "content": base64.b64encode((json.dumps(status) + "\n").encode()).decode(),
+          }
+          try:
+              payload["sha"] = request(url + "?ref=" + branch)["sha"]
+          except HTTPError as exc:
+              if exc.code != 404:
+                  raise
+          request(url, payload)
+          print("Orario raccolta salvato:", status["completed_at"])
+          PY
