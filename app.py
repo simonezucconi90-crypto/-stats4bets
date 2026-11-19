@@ -3871,7 +3871,7 @@ def monthly_strategy_statistics(df, today=None):
     return result
 
 
-def show_monthly_strategy_analysis(selected_df):
+def show_monthly_strategy_analysis(selected_df, compact=False):
     if selected_df is None or selected_df.empty:
         st.info("Nessuna partita conclusa rispetta questa selezione.")
         return
@@ -3883,41 +3883,42 @@ def show_monthly_strategy_analysis(selected_df):
 
     total = strategy_statistics(closed_selected)
 
-    st.markdown("### Totale strategia")
-    a,b,c,d = st.columns(4)
-    a.metric("Partite", total["closed"])
-    b.metric("Vinte", total["wins"])
-    c.metric("Perse", total["losses"])
-    d.metric("Win rate", f'{total["win_rate"]:.2f}%')
+    if not compact:
+        st.markdown("### Totale strategia")
+        a,b,c,d = st.columns(4)
+        a.metric("Partite", total["closed"])
+        b.metric("Vinte", total["wins"])
+        c.metric("Perse", total["losses"])
+        d.metric("Win rate", f'{total["win_rate"]:.2f}%')
 
-    e,f,g,h = st.columns(4)
-    e.metric("Puntato", f'€ {total["staked"]:.2f}')
-    f.metric("Profitto", f'€ {total["profit"]:.2f}')
-    g.metric("ROI", f'{total["roi"]:.2f}%')
-    h.metric("Quota media", f'{total["avg_odds"]:.2f}')
+        e,f,g,h = st.columns(4)
+        e.metric("Puntato", f'€ {total["staked"]:.2f}')
+        f.metric("Profitto", f'€ {total["profit"]:.2f}')
+        g.metric("ROI", f'{total["roi"]:.2f}%')
+        h.metric("Quota media", f'{total["avg_odds"]:.2f}')
 
-    i,j = st.columns(2)
-    i.metric(
-        "Utile medio per giocata",
-        f'€ {total["avg_profit_per_bet"]:.2f}',
-        help="Profitto totale diviso per il numero di partite concluse.",
-    )
-    j.metric(
-        "Rendimento medio sulla puntata",
-        f'{total["avg_profit_per_bet_pct"]:.2f}% su € {total["avg_stake"]:.2f}',
-        help="Utile medio per giocata in percentuale sulla puntata media.",
-    )
+        i,j = st.columns(2)
+        i.metric(
+            "Utile medio per giocata",
+            f'€ {total["avg_profit_per_bet"]:.2f}',
+            help="Profitto totale diviso per il numero di partite concluse.",
+        )
+        j.metric(
+            "Rendimento medio sulla puntata",
+            f'{total["avg_profit_per_bet_pct"]:.2f}% su € {total["avg_stake"]:.2f}',
+            help="Utile medio per giocata in percentuale sulla puntata media.",
+        )
 
-    max_daily_matches = int(total["max_matches_per_day"])
-    st.metric(
-        "Massimo partite in un giorno",
-        max_daily_matches,
-        help=(
-            "È il massimo storico di partite della strategia presenti nella "
-            "stessa data. Con puntata fissa da €20, il budget corrispondente è "
-            f"€ {max_daily_matches * 20:.2f}."
-        ),
-    )
+        max_daily_matches = int(total["max_matches_per_day"])
+        st.metric(
+            "Massimo partite in un giorno",
+            max_daily_matches,
+            help=(
+                "È il massimo storico di partite della strategia presenti nella "
+                "stessa data. Con puntata fissa da €20, il budget corrispondente è "
+                f"€ {max_daily_matches * 20:.2f}."
+            ),
+        )
 
     monthly = monthly_strategy_statistics(closed_selected)
     if monthly.empty:
@@ -3950,11 +3951,12 @@ def show_monthly_strategy_analysis(selected_df):
         "per i mesi completi coincide con il profitto effettivo."
     )
 
-    st.markdown("### 💰 Profitto per mese")
-    st.bar_chart(monthly.set_index("Mese")[["Profitto €"]])
+    if not compact:
+        st.markdown("### 💰 Profitto per mese")
+        st.bar_chart(monthly.set_index("Mese")[["Profitto €"]])
 
-    st.markdown("### 📈 Profitto cumulato per mese")
-    st.line_chart(monthly.set_index("Mese")[["Profitto cumulato €"]])
+        st.markdown("### 📈 Profitto cumulato per mese")
+        st.line_chart(monthly.set_index("Mese")[["Profitto cumulato €"]])
 
     best = monthly.sort_values(
         ["Profitto €", "ROI %"], ascending=[False, False]
@@ -4012,7 +4014,7 @@ def editor_form(data, prefix):
 S4B_MAIN = (
     ("Oggi", "🎯 Partite da giocare", "oggi", "calendar_today"),
     ("Elite", "🧠 Trova metodo migliore", "elite", "star"),
-    ("Analisi", "📅 Analisi mensile", "analisi", "bar_chart"),
+    ("Studi", "🔬 Studi strategie", "analisi", "bar_chart"),
     ("Altro", "Altro", "altro", "more_horiz"),
 )
 S4B_GROUPS = (
@@ -4024,6 +4026,7 @@ S4B_GROUPS = (
         ("Modifica o elimina", "✏️ Modifica/Elimina"),
     )),
     ("Analisi avanzate", (
+        ("Analisi mensile altre strategie", "📅 Analisi mensile"),
         ("Dashboard", "📊 Dashboard"),
         ("Profitto Elite storico", "💰 Profitto Elite storico"),
         ("Analisi filtri", "🔎 Analisi filtri"),
@@ -4201,8 +4204,8 @@ with st.container(key="s4b_navigation"):
 
 S4B_SECTION_COPY = {
     "oggi": ("Oggi", "Proposte della strategia ufficiale e filtri manuali."),
-    "elite": ("Strategia ufficiale", "Stato della strategia, classifica e andamento."),
-    "analisi": ("Analisi", "Risultati, rendimento e andamento mensile."),
+    "elite": ("La tua strategia", "Stato, andamento e risultati della sola Elite ufficiale."),
+    "analisi": ("Studi", "Strategie alternative, classifiche e verifiche del motore."),
     "altro": ("Strumenti", "Archivio, aggiornamenti e impostazioni."),
 }
 
@@ -5764,8 +5767,9 @@ elif page == "🧪 Laboratorio Strategie":
             st.line_chart(curve.set_index("Progressivo")["Profitto cumulato"])
 
 
-elif page == "🧠 Trova metodo migliore":
-    s4b_section_header("Elite", "elite")
+elif page in {"🧠 Trova metodo migliore", "🔬 Studi strategie"}:
+    studies_view = page == "🔬 Studi strategie"
+    s4b_section_header("Studi" if studies_view else "Elite", "analisi" if studies_view else "elite")
     elite_update = st.empty()
     scheduled_result = load_scheduled_strategy_result()
 
@@ -5801,33 +5805,34 @@ elif page == "🧠 Trova metodo migliore":
         top_n = 50
         validation_pct = 30
 
-        with st.expander("⚙️ Impostazioni ricerca (opzionali)", expanded=False):
-            st.caption(
-                "I valori consigliati sono già impostati. Modificali soltanto "
-                "se vuoi fare una ricerca sperimentale."
-            )
-            min_sample = st.number_input(
-                "Campione minimo",
-                min_value=1,
-                max_value=max(1, len(closed)),
-                value=default_min,
-                step=1,
-            )
-            max_filters = st.selectbox(
-                "Filtri massimi",
-                [1, 2, 3],
-                index=2,
-            )
-            top_n = st.selectbox(
-                "Strategie analizzate dal motore",
-                [20, 50, 100],
-                index=1,
-            )
-            validation_pct = st.selectbox(
-                "Quota dati per verifica",
-                [20, 30, 40],
-                index=1,
-            )
+        if studies_view:
+            with st.expander("⚙️ Impostazioni ricerca (opzionali)", expanded=False):
+                st.caption(
+                    "I valori consigliati sono già impostati. Modificali soltanto "
+                    "se vuoi fare una ricerca sperimentale."
+                )
+                min_sample = st.number_input(
+                    "Campione minimo",
+                    min_value=1,
+                    max_value=max(1, len(closed)),
+                    value=default_min,
+                    step=1,
+                )
+                max_filters = st.selectbox(
+                    "Filtri massimi",
+                    [1, 2, 3],
+                    index=2,
+                )
+                top_n = st.selectbox(
+                    "Strategie analizzate dal motore",
+                    [20, 50, 100],
+                    index=1,
+                )
+                validation_pct = st.selectbox(
+                    "Quota dati per verifica",
+                    [20, 30, 40],
+                    index=1,
+                )
 
         if len(closed) < 30:
             st.warning(
@@ -5928,7 +5933,7 @@ elif page == "🧠 Trova metodo migliore":
                 ] = loaded_key
                 st.success(
                     "✅ Ricerca strategie conclusa. "
-                    "La nuova Classifica Elite è pronta."
+                    "I risultati aggiornati sono pronti."
                 )
 
         shown_elite_timestamp = (
@@ -6047,344 +6052,175 @@ elif page == "🧠 Trova metodo migliore":
                 official_state=follow_state,
             )
 
-            st.markdown("### 🚦 Cosa fare adesso")
-            official_name_now = ""
-            health = None
+            if not studies_view:
+                st.markdown("### 🚦 Cosa fare adesso")
+                official_name_now = ""
+                health = None
 
-            if isinstance(follow_state, dict):
-                official_name_now = str(
-                    follow_state.get("official") or ""
-                )
-
-            if official_name_now and official_row is not None:
-                official_selected_now = apply_generated_strategy_name(
-                    closed,
-                    official_name_now,
-                )
-                health = official_operational_status(
-                    official_selected_now
-                )
-                official_currently_usable = (
-                    int(official_row.get("Partite", 0) or 0)
-                    >= required_elite_matches
-                    and float(official_row.get("ROI %", 0) or 0) > 0
-                    and float(official_row.get("Profitto €", 0) or 0) > 0
-                )
-
-                if (
-                    not official_currently_usable
-                    or health["status"].startswith("🔴")
-                ):
-                    operational_label = "⛔ NON DA SEGUIRE"
-                    st.error(
-                        f"⛔ NON DA SEGUIRE — "
-                        f"{human_strategy_name(official_name_now)}"
-                    )
-                elif health["status"].startswith("🟡"):
-                    operational_label = "⚠️ DA SEGUIRE CON CAUTELA"
-                    st.warning(
-                        f"⚠️ DA SEGUIRE CON CAUTELA — "
-                        f"{human_strategy_name(official_name_now)}"
-                    )
-                elif health["status"].startswith("🟢"):
-                    operational_label = "✅ DA SEGUIRE"
-                    st.success(
-                        f"✅ DA SEGUIRE — "
-                        f"{human_strategy_name(official_name_now)}"
-                    )
-                else:
-                    operational_label = "⚪ DATI INSUFFICIENTI"
-                    st.info(
-                        f"⚪ DATI INSUFFICIENTI — "
-                        f"{human_strategy_name(official_name_now)}"
+                if isinstance(follow_state, dict):
+                    official_name_now = str(
+                        follow_state.get("official") or ""
                     )
 
-                o1, o2 = st.columns(2)
-                o3, o4 = st.columns(2)
-                o1.metric(
-                    "Partite",
-                    int(official_row.get("Partite", 0) or 0),
-                )
-                o2.metric(
-                    "ROI",
-                    f'{float(official_row.get("ROI %", 0) or 0):.2f}%',
-                )
-                o3.metric(
-                    "Profitto",
-                    f'€ {float(official_row.get("Profitto €", 0) or 0):.2f}',
-                )
-                o4.metric(
-                    "ROI ultime 50",
-                    f'{float(health.get("roi50", 0) or 0):.2f}%',
-                )
-                o5, o6 = st.columns(2)
-                o5.metric(
-                    "Utile medio per giocata",
-                    f'€ {float(official_row.get("Utile medio / giocata €", 0) or 0):.2f}',
-                )
-                o6.metric(
-                    "Rendimento medio sulla puntata",
-                    f'{float(official_row.get("Rendimento medio su puntata %", 0) or 0):.2f}%',
-                )
-                official_max_daily = int(
-                    official_row.get("Max partite in un giorno", 0) or 0
-                )
-                o7, o8 = st.columns(2)
-                o7.metric(
-                    "Massimo partite in un giorno",
-                    official_max_daily,
-                )
-                o8.metric(
-                    "Budget storico con puntata €20",
-                    f"€ {official_max_daily * 20:.2f}",
-                )
-                st.caption(
-                    "La strategia ufficiale non viene sostituita automaticamente: "
-                    "un'eventuale alternativa Elite deve prima superare tutte le "
-                    "conferme previste."
-                )
-            else:
-                operational_label = "⚪ NESSUNA UFFICIALE"
-                st.info(
-                    "Non c'è ancora una strategia ufficiale consolidata da seguire."
-                )
-
-            # Da questo aggiornamento salviamo anche l'indicazione
-            # operativa. La simulazione storica potrà così rispettare non solo
-            # i cambi di strategia, ma anche eventuali periodi "non da seguire".
-            if isinstance(follow_state, dict):
-                operational_active = operational_label in {
-                    "✅ DA SEGUIRE",
-                    "⚠️ DA SEGUIRE CON CAUTELA",
-                }
-                state_needs_update = (
-                    follow_state.get("operational_label")
-                    != operational_label
-                    or follow_state.get("operational_active")
-                    is not operational_active
-                )
-                if state_needs_update:
-                    follow_state = dict(follow_state)
-                    follow_state["operational_label"] = operational_label
-                    follow_state["operational_active"] = operational_active
-                    save_strategy_follow_state(follow_state)
-
-            # L'ufficiale deve avere sempre il proprio grafico, anche se
-            # assente dalla classifica corrente o temporaneamente sospesa.
-            if official_name_now:
-                st.markdown("### 📈 Andamento dell’Elite ufficiale")
-                st.caption(human_strategy_name(official_name_now))
-                official_chart_matches = apply_generated_strategy_name(
-                    closed,
-                    official_name_now,
-                )
-                if official_chart_matches.empty:
-                    st.info(
-                        "Nessuna partita conclusa disponibile per il grafico "
-                        "della strategia ufficiale."
+                if official_name_now and official_row is not None:
+                    official_selected_now = apply_generated_strategy_name(
+                        closed,
+                        official_name_now,
                     )
-                else:
-                    official_curve = official_chart_matches.sort_values(
-                        ["date", "time", "id"]
-                    ).copy()
-                    official_curve["Profitto cumulato"] = pd.to_numeric(
-                        official_curve["profit"],
-                        errors="coerce",
-                    ).fillna(0).cumsum()
-                    official_curve["Progressivo"] = range(
-                        1, len(official_curve) + 1
+                    health = official_operational_status(
+                        official_selected_now
                     )
-                    st.line_chart(
-                        official_curve.set_index("Progressivo")[
-                            "Profitto cumulato"
-                        ]
+                    official_currently_usable = (
+                        int(official_row.get("Partite", 0) or 0)
+                        >= required_elite_matches
+                        and float(official_row.get("ROI %", 0) or 0) > 0
+                        and float(official_row.get("Profitto €", 0) or 0) > 0
+                    )
+
+                    if (
+                        not official_currently_usable
+                        or health["status"].startswith("🔴")
+                    ):
+                        operational_label = "⛔ NON DA SEGUIRE"
+                        st.error(
+                            f"⛔ NON DA SEGUIRE — "
+                            f"{human_strategy_name(official_name_now)}"
+                        )
+                    elif health["status"].startswith("🟡"):
+                        operational_label = "⚠️ DA SEGUIRE CON CAUTELA"
+                        st.warning(
+                            f"⚠️ DA SEGUIRE CON CAUTELA — "
+                            f"{human_strategy_name(official_name_now)}"
+                        )
+                    elif health["status"].startswith("🟢"):
+                        operational_label = "✅ DA SEGUIRE"
+                        st.success(
+                            f"✅ DA SEGUIRE — "
+                            f"{human_strategy_name(official_name_now)}"
+                        )
+                    else:
+                        operational_label = "⚪ DATI INSUFFICIENTI"
+                        st.info(
+                            f"⚪ DATI INSUFFICIENTI — "
+                            f"{human_strategy_name(official_name_now)}"
+                        )
+
+                    o1, o2 = st.columns(2)
+                    o3, o4 = st.columns(2)
+                    o1.metric(
+                        "Partite",
+                        int(official_row.get("Partite", 0) or 0),
+                    )
+                    o2.metric(
+                        "ROI",
+                        f'{float(official_row.get("ROI %", 0) or 0):.2f}%',
+                    )
+                    o3.metric(
+                        "Profitto",
+                        f'€ {float(official_row.get("Profitto €", 0) or 0):.2f}',
+                    )
+                    o4.metric(
+                        "ROI ultime 50",
+                        f'{float(health.get("roi50", 0) or 0):.2f}%',
+                    )
+                    o5, o6 = st.columns(2)
+                    o5.metric(
+                        "Utile medio per giocata",
+                        f'€ {float(official_row.get("Utile medio / giocata €", 0) or 0):.2f}',
+                    )
+                    o6.metric(
+                        "Rendimento medio sulla puntata",
+                        f'{float(official_row.get("Rendimento medio su puntata %", 0) or 0):.2f}%',
+                    )
+                    official_max_daily = int(
+                        official_row.get("Max partite in un giorno", 0) or 0
+                    )
+                    o7, o8 = st.columns(2)
+                    o7.metric(
+                        "Massimo partite in un giorno",
+                        official_max_daily,
+                    )
+                    o8.metric(
+                        "Budget storico con puntata €20",
+                        f"€ {official_max_daily * 20:.2f}",
                     )
                     st.caption(
-                        "Profitto cumulato in € di tutte le partite concluse "
-                        "che rispettano l’attuale strategia ufficiale, "
-                        "in ordine cronologico. Non rappresenta le sole "
-                        "giocate effettivamente effettuate né lo storico "
-                        "dei cambi di strategia."
+                        "La strategia ufficiale non viene sostituita automaticamente: "
+                        "un'eventuale alternativa Elite deve prima superare tutte le "
+                        "conferme previste."
                     )
-
-            st.markdown("### 🏆 Classifica Elite")
-            st.caption(
-                "È l'unica classifica principale: contiene poche strategie mature "
-                "e stabili. Le alternative Elite restano in osservazione finché "
-                "non diventano ufficiali."
-            )
-
-            if elite_table.empty:
-                st.info(
-                    "Nessuna strategia ha ancora tutti i requisiti Elite. "
-                    "Il motore continua comunque a raccogliere dati."
-                )
-            else:
-                elite_display = add_human_strategy_column(
-                    elite_table
-                ).copy()
-                elite_display["Indicazione"] = (
-                    "👀 ELITE — NON ANCORA UFFICIALE"
-                )
-
-                if official_name_now:
-                    official_mask = (
-                        elite_table["Strategia"].astype(str)
-                        == official_name_now
-                    )
-                    elite_display.loc[
-                        official_mask,
-                        "Indicazione",
-                    ] = operational_label
-
-                elite_columns = [
-                    "Posizione Elite",
-                    "Strategia",
-                    "Indicazione",
-                    "Punteggio Elite",
-                    "Partite",
-                    "Max partite in un giorno",
-                    "ROI %",
-                    "Profitto €",
-                    "Utile medio / giocata €",
-                    "Rendimento medio su puntata %",
-                    "Stabilità %",
-                    "ROI ultime 50 %",
-                    "Utile medio ultime 50 €",
-                    "Rendimento medio ultime 50 %",
-                ]
-                st.dataframe(
-                    elite_display[
-                        [
-                            column
-                            for column in elite_columns
-                            if column in elite_display.columns
-                        ]
-                    ],
-                    use_container_width=True,
-                    hide_index=True,
-                )
-                st.caption(
-                    f"Soglia Elite attuale: almeno "
-                    f"{required_elite_matches} partite concluse "
-                    f"su {len(closed)} totali (20%, minimo 100, massimo 150)."
-                )
-
-                decision_message = elite_decision_message(
-                    elite_table,
-                    follow_state,
-                )
-                if decision_message.startswith("✅"):
-                    st.success(decision_message)
                 else:
-                    st.info(decision_message)
-
-            st.markdown("### 📈 Apri una strategia Elite")
-            st.caption(
-                "Scegli una voce della Classifica Elite per vedere il suo "
-                "andamento. L'elenco mantiene lo stesso ordine della classifica."
-            )
-
-            detail_ranking = (
-                elite_table.copy()
-                if elite_table is not None and not elite_table.empty
-                else pd.DataFrame()
-            )
-
-            if detail_ranking.empty:
-                st.info(
-                    "Al momento non ci sono strategie Elite disponibili da aprire."
-                )
-            else:
-                ranking_ids = (
-                    ranking.set_index("Strategia")["ID"].to_dict()
-                    if "ID" in ranking.columns
-                    else {}
-                )
-                strategy_map = {}
-                for elite_position, (_, row) in enumerate(
-                    detail_ranking.iterrows(),
-                    start=1,
-                ):
-                    strategy_name_value = str(row["Strategia"])
-                    label = (
-                        f'🏆 Elite #{elite_position} — '
-                        f'{human_strategy_name(strategy_name_value)}'
+                    operational_label = "⚪ NESSUNA UFFICIALE"
+                    st.info(
+                        "Non c'è ancora una strategia ufficiale consolidata da seguire."
                     )
-                    strategy_map[label] = {
-                        "id": ranking_ids.get(strategy_name_value, ""),
-                        "name": strategy_name_value,
+
+                # Da questo aggiornamento salviamo anche l'indicazione
+                # operativa. La simulazione storica potrà così rispettare non solo
+                # i cambi di strategia, ma anche eventuali periodi "non da seguire".
+                if isinstance(follow_state, dict):
+                    operational_active = operational_label in {
+                        "✅ DA SEGUIRE",
+                        "⚠️ DA SEGUIRE CON CAUTELA",
                     }
+                    state_needs_update = (
+                        follow_state.get("operational_label")
+                        != operational_label
+                        or follow_state.get("operational_active")
+                        is not operational_active
+                    )
+                    if state_needs_update:
+                        follow_state = dict(follow_state)
+                        follow_state["operational_label"] = operational_label
+                        follow_state["operational_active"] = operational_active
+                        save_strategy_follow_state(follow_state)
 
-                selected_label = st.selectbox(
-                    "Strategia Elite",
-                    list(strategy_map.keys()),
-                    key="strategy_detail_elite_v4",
-                )
-                selected_strategy = strategy_map[selected_label]
-                strategy_name = selected_strategy["name"]
-                selected_df = apply_generated_strategy_name(
-                    closed,
-                    strategy_name,
-                )
+                # L'ufficiale deve avere sempre il proprio grafico, anche se
+                # assente dalla classifica corrente o temporaneamente sospesa.
+                if official_name_now:
+                    st.markdown("### 📈 Andamento dell’Elite ufficiale")
+                    st.caption(human_strategy_name(official_name_now))
+                    official_chart_matches = apply_generated_strategy_name(
+                        closed,
+                        official_name_now,
+                    )
+                    if official_chart_matches.empty:
+                        st.info(
+                            "Nessuna partita conclusa disponibile per il grafico "
+                            "della strategia ufficiale."
+                        )
+                    else:
+                        official_curve = official_chart_matches.sort_values(
+                            ["date", "time", "id"]
+                        ).copy()
+                        official_curve["Profitto cumulato"] = pd.to_numeric(
+                            official_curve["profit"],
+                            errors="coerce",
+                        ).fillna(0).cumsum()
+                        official_curve["Progressivo"] = range(
+                            1, len(official_curve) + 1
+                        )
+                        st.line_chart(
+                            official_curve.set_index("Progressivo")[
+                                "Profitto cumulato"
+                            ]
+                        )
+                        st.caption(
+                            "Profitto cumulato in € di tutte le partite concluse "
+                            "che rispettano l’attuale strategia ufficiale, "
+                            "in ordine cronologico. Non rappresenta le sole "
+                            "giocate effettivamente effettuate né lo storico "
+                            "dei cambi di strategia."
+                        )
 
-                if selected_df.empty:
-                    st.warning(
-                        "Questa strategia non ha partite concluse nel database attuale."
-                    )
-                else:
-                    stats = strategy_statistics(selected_df)
-                    selected_elite = detail_ranking[
-                        detail_ranking["Strategia"].astype(str)
-                        == strategy_name
-                    ].iloc[0]
-                    m1, m2 = st.columns(2)
-                    m3, m4 = st.columns(2)
-                    m1.metric("Partite", stats["closed"])
-                    m2.metric("ROI", f'{stats["roi"]:.2f}%')
-                    m3.metric("Profitto", f'€ {stats["profit"]:.2f}')
-                    m4.metric(
-                        "Stabilità",
-                        f'{float(selected_elite.get("Stabilità %", 0) or 0):.1f}%',
-                    )
-                    m5, m6 = st.columns(2)
-                    m5.metric(
-                        "Utile medio per giocata",
-                        f'€ {stats["avg_profit_per_bet"]:.2f}',
-                    )
-                    m6.metric(
-                        "Rendimento medio sulla puntata",
-                        f'{stats["avg_profit_per_bet_pct"]:.2f}% su € {stats["avg_stake"]:.2f}',
-                    )
-                    detail_max_daily = int(stats["max_matches_per_day"])
-                    m7, m8 = st.columns(2)
-                    m7.metric(
-                        "Massimo partite in un giorno",
-                        detail_max_daily,
-                    )
-                    m8.metric(
-                        "Budget storico con puntata €20",
-                        f"€ {detail_max_daily * 20:.2f}",
-                    )
 
-                    detail = selected_df.sort_values(
+                    st.markdown("### 📅 Analisi mensile della tua strategia")
+                    show_monthly_strategy_analysis(official_chart_matches, compact=True)
+
+                    strategy_name = official_name_now
+                    detail = official_chart_matches.sort_values(
                         ["date", "time", "id"]
                     ).copy()
-                    curve = detail.copy()
-                    curve["Profitto cumulato"] = pd.to_numeric(
-                        curve["profit"],
-                        errors="coerce",
-                    ).fillna(0).cumsum()
-                    curve["Progressivo"] = range(
-                        1,
-                        len(curve) + 1,
-                    )
-                    st.line_chart(
-                        curve.set_index("Progressivo")[
-                            "Profitto cumulato"
-                        ]
-                    )
-
                     with st.expander(
                         "📋 Partite usate nel calcolo",
                         expanded=False,
@@ -6474,69 +6310,361 @@ elif page == "🧠 Trova metodo migliore":
                                 hide_index=True,
                             )
 
-            with st.expander(
-                "🔬 Analisi avanzate e verifiche tecniche",
-                expanded=False,
-            ):
+                    with st.expander("🔬 Analisi avanzata della tua strategia", expanded=False):
+                        st.caption(
+                            "Verifiche riferite esclusivamente all’Elite ufficiale attuale. "
+                            "Le classifiche e le alternative sono nella sezione Studi."
+                        )
+                        if official_row is not None:
+                            st.dataframe(
+                                add_human_strategy_column(pd.DataFrame([official_row])),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        if health is not None:
+                            st.write(health)
+                        st.caption(follow_message)
+
                 st.caption(
-                    "Queste tabelle servono al controllo del motore, non alla "
-                    "decisione quotidiana. I loro calcoli restano attivi."
-                )
-                st.write(
-                    f"Snapshot storici disponibili: {snapshot_count}"
+                    "Vuoi confrontare altre strategie? Apri Studi. "
+                    "Qui i dati si riferiscono solo alla tua Elite ufficiale attuale, "
+                    "non allo storico delle strategie cambiate o alle sole giocate reali."
                 )
 
-                if not definitive.empty:
-                    st.markdown("#### Classifica definitiva completa")
-                    definitive_display = add_human_strategy_column(
-                        definitive
-                    )
-                    st.dataframe(
-                        definitive_display.head(20),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
 
-                strong_watch = build_strong_watchlist(
-                    ranking,
-                    history_table,
-                    snapshot_count,
-                    selections,
-                    closed,
-                    elite_table,
+            else:
+                official_name_now = str((follow_state or {}).get("official") or "")
+                operational_label = str((follow_state or {}).get("operational_label") or "Ufficiale")
+                st.markdown("### 🏆 Classifica Elite")
+                st.caption(
+                    "È l'unica classifica principale: contiene poche strategie mature "
+                    "e stabili. Le alternative Elite restano in osservazione finché "
+                    "non diventano ufficiali."
                 )
-                st.markdown("#### Strategie in osservazione")
-                if strong_watch.empty:
+
+                if elite_table.empty:
                     st.info(
-                        "Nessuna strategia abbastanza consolidata da mostrare."
+                        "Nessuna strategia ha ancora tutti i requisiti Elite. "
+                        "Il motore continua comunque a raccogliere dati."
                     )
                 else:
+                    elite_display = add_human_strategy_column(
+                        elite_table
+                    ).copy()
+                    elite_display["Indicazione"] = (
+                        "👀 ELITE — NON ANCORA UFFICIALE"
+                    )
+
+                    if official_name_now:
+                        official_mask = (
+                            elite_table["Strategia"].astype(str)
+                            == official_name_now
+                        )
+                        elite_display.loc[
+                            official_mask,
+                            "Indicazione",
+                        ] = operational_label
+
+                    elite_columns = [
+                        "Posizione Elite",
+                        "Strategia",
+                        "Indicazione",
+                        "Punteggio Elite",
+                        "Partite",
+                        "Max partite in un giorno",
+                        "ROI %",
+                        "Profitto €",
+                        "Utile medio / giocata €",
+                        "Rendimento medio su puntata %",
+                        "Stabilità %",
+                        "ROI ultime 50 %",
+                        "Utile medio ultime 50 €",
+                        "Rendimento medio ultime 50 %",
+                    ]
                     st.dataframe(
-                        add_human_strategy_column(strong_watch),
+                        elite_display[
+                            [
+                                column
+                                for column in elite_columns
+                                if column in elite_display.columns
+                            ]
+                        ],
                         use_container_width=True,
                         hide_index=True,
                     )
-
-                st.markdown("#### Analisi range quote")
-                if odds_table.empty:
-                    st.info("Nessun dato disponibile per i range quota.")
-                else:
-                    st.dataframe(
-                        odds_table,
-                        use_container_width=True,
-                        hide_index=True,
+                    st.caption(
+                        f"Soglia Elite attuale: almeno "
+                        f"{required_elite_matches} partite concluse "
+                        f"su {len(closed)} totali (20%, minimo 100, massimo 150)."
                     )
 
-                st.markdown("#### Classifica completa del motore")
-                st.dataframe(
-                    ranking.drop(
-                        columns=["ID"],
-                        errors="ignore",
-                    ),
-                    use_container_width=True,
-                    hide_index=True,
+                    decision_message = elite_decision_message(
+                        elite_table,
+                        follow_state,
+                    )
+                    if decision_message.startswith("✅"):
+                        st.success(decision_message)
+                    else:
+                        st.info(decision_message)
+
+                st.markdown("### 📈 Apri una strategia Elite")
+                st.caption(
+                    "Scegli una voce della Classifica Elite per vedere il suo "
+                    "andamento. L'elenco mantiene lo stesso ordine della classifica."
                 )
-                st.caption(follow_message)
+
+                detail_ranking = (
+                    elite_table.copy()
+                    if elite_table is not None and not elite_table.empty
+                    else pd.DataFrame()
+                )
+
+                if detail_ranking.empty:
+                    st.info(
+                        "Al momento non ci sono strategie Elite disponibili da aprire."
+                    )
+                else:
+                    ranking_ids = (
+                        ranking.set_index("Strategia")["ID"].to_dict()
+                        if "ID" in ranking.columns
+                        else {}
+                    )
+                    strategy_map = {}
+                    for elite_position, (_, row) in enumerate(
+                        detail_ranking.iterrows(),
+                        start=1,
+                    ):
+                        strategy_name_value = str(row["Strategia"])
+                        label = (
+                            f'🏆 Elite #{elite_position} — '
+                            f'{human_strategy_name(strategy_name_value)}'
+                        )
+                        strategy_map[label] = {
+                            "id": ranking_ids.get(strategy_name_value, ""),
+                            "name": strategy_name_value,
+                        }
+
+                    selected_label = st.selectbox(
+                        "Strategia Elite",
+                        list(strategy_map.keys()),
+                        key="strategy_detail_elite_v4",
+                    )
+                    selected_strategy = strategy_map[selected_label]
+                    strategy_name = selected_strategy["name"]
+                    selected_df = apply_generated_strategy_name(
+                        closed,
+                        strategy_name,
+                    )
+
+                    if selected_df.empty:
+                        st.warning(
+                            "Questa strategia non ha partite concluse nel database attuale."
+                        )
+                    else:
+                        stats = strategy_statistics(selected_df)
+                        selected_elite = detail_ranking[
+                            detail_ranking["Strategia"].astype(str)
+                            == strategy_name
+                        ].iloc[0]
+                        m1, m2 = st.columns(2)
+                        m3, m4 = st.columns(2)
+                        m1.metric("Partite", stats["closed"])
+                        m2.metric("ROI", f'{stats["roi"]:.2f}%')
+                        m3.metric("Profitto", f'€ {stats["profit"]:.2f}')
+                        m4.metric(
+                            "Stabilità",
+                            f'{float(selected_elite.get("Stabilità %", 0) or 0):.1f}%',
+                        )
+                        m5, m6 = st.columns(2)
+                        m5.metric(
+                            "Utile medio per giocata",
+                            f'€ {stats["avg_profit_per_bet"]:.2f}',
+                        )
+                        m6.metric(
+                            "Rendimento medio sulla puntata",
+                            f'{stats["avg_profit_per_bet_pct"]:.2f}% su € {stats["avg_stake"]:.2f}',
+                        )
+                        detail_max_daily = int(stats["max_matches_per_day"])
+                        m7, m8 = st.columns(2)
+                        m7.metric(
+                            "Massimo partite in un giorno",
+                            detail_max_daily,
+                        )
+                        m8.metric(
+                            "Budget storico con puntata €20",
+                            f"€ {detail_max_daily * 20:.2f}",
+                        )
+
+                        detail = selected_df.sort_values(
+                            ["date", "time", "id"]
+                        ).copy()
+                        curve = detail.copy()
+                        curve["Profitto cumulato"] = pd.to_numeric(
+                            curve["profit"],
+                            errors="coerce",
+                        ).fillna(0).cumsum()
+                        curve["Progressivo"] = range(
+                            1,
+                            len(curve) + 1,
+                        )
+                        st.line_chart(
+                            curve.set_index("Progressivo")[
+                                "Profitto cumulato"
+                            ]
+                        )
+
+                        with st.expander(
+                            "📋 Partite usate nel calcolo",
+                            expanded=False,
+                        ):
+                            detail["Esito"] = detail["outcome"].map(
+                                {"V": "🟢 V", "P": "🔴 P"}
+                            )
+                            detail["Quota"] = pd.to_numeric(
+                                detail["current_odds"],
+                                errors="coerce",
+                            ).round(2)
+                            detail["Profitto €"] = pd.to_numeric(
+                                detail["profit"],
+                                errors="coerce",
+                            ).round(2)
+                            shown = detail[[
+                                "date",
+                                "time",
+                                "league",
+                                "match_name",
+                                "Quota",
+                                "Esito",
+                                "final_score",
+                                "Profitto €",
+                            ]].rename(columns={
+                                "date": "Data",
+                                "time": "Ora",
+                                "league": "Campionato",
+                                "match_name": "Partita",
+                                "final_score": "Risultato",
+                            })
+                            st.dataframe(
+                                shown.sort_values(
+                                    ["Data", "Ora"],
+                                    ascending=[False, False],
+                                    na_position="last",
+                                ),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                        pending_now = (
+                            df[
+                                ~df["outcome"].isin(["V", "P"])
+                            ].copy()
+                            if not df.empty
+                            else pd.DataFrame(columns=ALL_COLUMNS)
+                        )
+                        selected_pending = apply_generated_strategy_name(
+                            pending_now,
+                            strategy_name,
+                        )
+
+                        with st.expander(
+                            f"⏳ Partite attuali compatibili ({len(selected_pending)})",
+                            expanded=False,
+                        ):
+                            if selected_pending.empty:
+                                st.info(
+                                    "Nessuna partita in attesa rispetta questa strategia."
+                                )
+                            else:
+                                upcoming = selected_pending.copy()
+                                upcoming["Quota"] = pd.to_numeric(
+                                    upcoming["current_odds"],
+                                    errors="coerce",
+                                ).round(2)
+                                upcoming = upcoming[[
+                                    "date",
+                                    "time",
+                                    "league",
+                                    "match_name",
+                                    "Quota",
+                                ]].rename(columns={
+                                    "date": "Data",
+                                    "time": "Ora",
+                                    "league": "Campionato",
+                                    "match_name": "Partita",
+                                })
+                                st.dataframe(
+                                    upcoming.sort_values(
+                                        ["Data", "Ora"],
+                                        ascending=[False, False],
+                                        na_position="last",
+                                    ),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                )
+
+                with st.expander(
+                    "🔬 Analisi avanzate e verifiche tecniche",
+                    expanded=False,
+                ):
+                    st.caption(
+                        "Queste tabelle servono al controllo del motore, non alla "
+                        "decisione quotidiana. I loro calcoli restano attivi."
+                    )
+                    st.write(
+                        f"Snapshot storici disponibili: {snapshot_count}"
+                    )
+
+                    if not definitive.empty:
+                        st.markdown("#### Classifica definitiva completa")
+                        definitive_display = add_human_strategy_column(
+                            definitive
+                        )
+                        st.dataframe(
+                            definitive_display.head(20),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                    strong_watch = build_strong_watchlist(
+                        ranking,
+                        history_table,
+                        snapshot_count,
+                        selections,
+                        closed,
+                        elite_table,
+                    )
+                    st.markdown("#### Strategie in osservazione")
+                    if strong_watch.empty:
+                        st.info(
+                            "Nessuna strategia abbastanza consolidata da mostrare."
+                        )
+                    else:
+                        st.dataframe(
+                            add_human_strategy_column(strong_watch),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                    st.markdown("#### Analisi range quote")
+                    if odds_table.empty:
+                        st.info("Nessun dato disponibile per i range quota.")
+                    else:
+                        st.dataframe(
+                            odds_table,
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+
+                    st.markdown("#### Classifica completa del motore")
+                    st.dataframe(
+                        ranking.drop(
+                            columns=["ID"],
+                            errors="ignore",
+                        ),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                    st.caption(follow_message)
 
         elif ranking is not None:
             st.info(
