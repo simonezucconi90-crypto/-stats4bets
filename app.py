@@ -3145,6 +3145,7 @@ def strategy_follow_display_row(definitive, state, closed=None):
 
         display["Partite"] = live_stats["closed"]
         display["Max partite in un giorno"] = live_stats["max_matches_per_day"]
+        display["Max perdite consecutive"] = live_stats["max_losing_streak"]
         display["Vinte"] = live_stats["wins"]
         display["Perse"] = live_stats["losses"]
         display["Win rate %"] = round(
@@ -6144,6 +6145,10 @@ elif page in {"🧠 Trova metodo migliore", "🔬 Studi strategie"}:
                     o8.metric(
                         "Budget storico con puntata €20",
                         f"€ {official_max_daily * 20:.2f}",
+                    )
+                    st.metric(
+                        "Massimo sconfitte consecutive",
+                        int(official_row.get("Max perdite consecutive", 0) or 0),
                     )
                     st.caption(
                         "La strategia ufficiale non viene sostituita automaticamente: "
