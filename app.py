@@ -3144,6 +3144,7 @@ def strategy_follow_display_row(definitive, state, closed=None):
         live_stats = strategy_statistics(live)
 
         display["Partite"] = live_stats["closed"]
+        display["Max partite in un giorno"] = live_stats["max_matches_per_day"]
         display["Vinte"] = live_stats["wins"]
         display["Perse"] = live_stats["losses"]
         display["Win rate %"] = round(
