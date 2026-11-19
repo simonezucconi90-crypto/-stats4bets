@@ -6169,6 +6169,44 @@ elif page == "🧠 Trova metodo migliore":
                     follow_state["operational_active"] = operational_active
                     save_strategy_follow_state(follow_state)
 
+            # L'ufficiale deve avere sempre il proprio grafico, anche se
+            # assente dalla classifica corrente o temporaneamente sospesa.
+            if official_name_now:
+                st.markdown("### 📈 Andamento dell’Elite ufficiale")
+                st.caption(human_strategy_name(official_name_now))
+                official_chart_matches = apply_generated_strategy_name(
+                    closed,
+                    official_name_now,
+                )
+                if official_chart_matches.empty:
+                    st.info(
+                        "Nessuna partita conclusa disponibile per il grafico "
+                        "della strategia ufficiale."
+                    )
+                else:
+                    official_curve = official_chart_matches.sort_values(
+                        ["date", "time", "id"]
+                    ).copy()
+                    official_curve["Profitto cumulato"] = pd.to_numeric(
+                        official_curve["profit"],
+                        errors="coerce",
+                    ).fillna(0).cumsum()
+                    official_curve["Progressivo"] = range(
+                        1, len(official_curve) + 1
+                    )
+                    st.line_chart(
+                        official_curve.set_index("Progressivo")[
+                            "Profitto cumulato"
+                        ]
+                    )
+                    st.caption(
+                        "Profitto cumulato in € di tutte le partite concluse "
+                        "che rispettano l’attuale strategia ufficiale, "
+                        "in ordine cronologico. Non rappresenta le sole "
+                        "giocate effettivamente effettuate né lo storico "
+                        "dei cambi di strategia."
+                    )
+
             st.markdown("### 🏆 Classifica Elite")
             st.caption(
                 "È l'unica classifica principale: contiene poche strategie mature "
