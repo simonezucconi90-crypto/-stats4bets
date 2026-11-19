@@ -3951,10 +3951,10 @@ def show_monthly_strategy_analysis(selected_df, compact=False):
         "per i mesi completi coincide con il profitto effettivo."
     )
 
-    if not compact:
-        st.markdown("### 💰 Profitto per mese")
-        st.bar_chart(monthly.set_index("Mese")[["Profitto €"]])
+    st.markdown("### 💰 Profitto per mese")
+    st.bar_chart(monthly.set_index("Mese")[["Profitto €"]])
 
+    if not compact:
         st.markdown("### 📈 Profitto cumulato per mese")
         st.line_chart(monthly.set_index("Mese")[["Profitto cumulato €"]])
 
