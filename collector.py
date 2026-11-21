@@ -4,7 +4,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
@@ -371,10 +371,24 @@ def main():
         )
         page = context.new_page()
 
+        def log_navigation(response):
+            request = response.request
+            if request.resource_type == "document" and request.is_navigation_request():
+                url = urlsplit(response.url)
+                print(
+                    f"Navigazione {request.method} {url.hostname}{url.path} "
+                    f"→ HTTP {response.status}",
+                    flush=True,
+                )
+
+        page.on("response", log_navigation)
+
         page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(2500)
         if page.locator('input[type="password"]').count() > 0:
             login(page)
+            login_form_visible = first_visible(page, ['input[type="password"]']) is not None
+            print(f"Dopo invio login: modulo ancora visibile = {login_form_visible}", flush=True)
 
         response = page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
         if response is not None and not response.ok:
