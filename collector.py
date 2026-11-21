@@ -392,6 +392,25 @@ def main():
 
         response = page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
         if response is not None and not response.ok:
+            # I log del repository sono pubblici: registrare solo segnali noti.
+            error_text = clean(page.locator("body").inner_text(timeout=5000)).casefold()
+            markers = (
+                "maintenance", "manutenzione", "temporarily unavailable",
+                "service unavailable", "rate limit", "too many requests",
+                "access denied", "security", "automated", "bot", "captcha",
+                "upstream", "backend", "overload", "capacity", "cloudflare",
+                "wordfence", "imunify", "mod_security", "varnish",
+            )
+            signals = [word for word in markers if re.search(
+                r"\b" + re.escape(word) + r"\b", error_text
+            )]
+            retry_after = response.headers.get("retry-after", "")
+            if retry_after.isdecimal():
+                print(f"Retry-After: {int(retry_after)} secondi")
+            reference = response.headers.get("cf-ray", "")
+            if re.fullmatch(r"[0-9a-fA-F]+-[A-Za-z]{3}", reference):
+                print(f"Riferimento Cloudflare: {reference}")
+            print("Segnali nella pagina di errore:", ", ".join(signals) or "nessuno")
             raise RuntimeError(f"Pagina partite non disponibile (HTTP {response.status}).")
 
         grid = page.locator(MATCH_GRID_SELECTOR).first
