@@ -14,6 +14,8 @@ from supabase import create_client
 LOGIN_URL = "https://superfoglio.it/"
 TARGET_URL = "https://superfoglio.it/stats_table.php?q=mindbet"
 
+MATCH_GRID_SELECTOR = "div.grid.lg\\:hidden.grid-cols-1.gap-6.mb-6"
+
 USER = os.environ["STATS4BETS_USER"]
 PASSWORD = os.environ["STATS4BETS_PASSWORD"]
 SUPABASE_URL = os.environ["SUPABASE_URL"]
@@ -114,7 +116,7 @@ def date_to_iso(value):
 
 def parse_list(html):
     soup = BeautifulSoup(html, "html.parser")
-    grid = soup.select_one("div.grid.lg\\:hidden.grid-cols-1.gap-6.mb-6")
+    grid = soup.select_one(MATCH_GRID_SELECTOR)
     if grid is None:
         raise RuntimeError("Griglia partite non trovata.")
 
@@ -374,10 +376,21 @@ def main():
         if page.locator('input[type="password"]').count() > 0:
             login(page)
 
-        page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(5000)
-        if page.locator('input[type="password"]').count() > 0:
-            raise RuntimeError("Login non riuscito.")
+        response = page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
+        if response is not None and not response.ok:
+            raise RuntimeError(f"Pagina partite non disponibile (HTTP {response.status}).")
+
+        grid = page.locator(MATCH_GRID_SELECTOR).first
+        login_form = page.locator('input[type="password"]').first
+        try:
+            grid.or_(login_form).first.wait_for(state="attached", timeout=20000)
+        except PlaywrightTimeoutError as exc:
+            raise RuntimeError(
+                "Griglia partite non trovata dopo 20 secondi. "
+                "La pagina ha risposto senza mostrare la griglia o il login."
+            ) from exc
+        if login_form.count() > 0 and grid.count() == 0:
+            raise RuntimeError("Il sito ha richiesto di nuovo il login.")
 
         matches = parse_list(page.content())
         if not matches:
