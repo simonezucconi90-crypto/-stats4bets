@@ -4146,6 +4146,7 @@ st.markdown(
     .st-key-s4b_tools [data-testid="stVerticalBlockBorderWrapper"] {
         background:#131815; border-color:#314038; border-radius:1rem;
     }
+    .st-key-s4b_match_list { padding-bottom:.75rem; }
     .s4b-match {
         display:grid; grid-template-columns:minmax(0,1fr) auto;
         gap:.5rem .8rem; align-items:center;
