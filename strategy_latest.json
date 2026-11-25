@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-11-25T04:34:15.758081+00:00",
-  "engine_signature": "3c2ad14348562db3c3f05ed31083448e181f311cab24d79bd6387985cd49c90a",
-  "closed_matches": 1405,
-  "snapshot_count": 180,
+  "generated_at": "2026-11-25T16:01:38.968739+00:00",
+  "engine_signature": "e8d748bbcfa0b9e29f7ed7b8ccd3cec1fb952b02a3b5a9ebda35144f487a8e37",
+  "closed_matches": 1406,
+  "snapshot_count": 181,
   "history_result": {
     "ok": true,
     "saved": true,
@@ -26,8 +26,8 @@
       "ROI %": 21.08,
       "Utile medio / giocata €": 4.22,
       "Rendimento medio su puntata %": 21.08,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 19.9,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 19.86,
       "Profitto / 100€": 21.08,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -38,7 +38,7 @@
       "Partite verifica": 31,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 20.03
+      "Punteggio": 20.02
     },
     {
       "ID": "S12568",
@@ -55,8 +55,8 @@
       "ROI %": 19.98,
       "Utile medio / giocata €": 4.0,
       "Rendimento medio su puntata %": 19.98,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 18.81,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 18.77,
       "Profitto / 100€": 19.98,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -67,7 +67,7 @@
       "Partite verifica": 31,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 19.28
+      "Punteggio": 19.27
     },
     {
       "ID": "S01208",
@@ -84,8 +84,8 @@
       "ROI %": 19.26,
       "Utile medio / giocata €": 3.85,
       "Rendimento medio su puntata %": 19.26,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 18.09,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 18.05,
       "Profitto / 100€": 19.26,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -96,7 +96,7 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 18.89
+      "Punteggio": 18.88
     },
     {
       "ID": "S13509",
@@ -113,8 +113,8 @@
       "ROI %": 19.26,
       "Utile medio / giocata €": 3.85,
       "Rendimento medio su puntata %": 19.26,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 18.09,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 18.05,
       "Profitto / 100€": 19.26,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -125,7 +125,7 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 18.89
+      "Punteggio": 18.88
     },
     {
       "ID": "S14377",
@@ -142,8 +142,8 @@
       "ROI %": 19.26,
       "Utile medio / giocata €": 3.85,
       "Rendimento medio su puntata %": 19.26,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 18.09,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 18.05,
       "Profitto / 100€": 19.26,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -154,7 +154,7 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 18.89
+      "Punteggio": 18.88
     },
     {
       "ID": "S11554",
@@ -171,8 +171,8 @@
       "ROI %": 18.49,
       "Utile medio / giocata €": 3.7,
       "Rendimento medio su puntata %": 18.49,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 17.31,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 17.27,
       "Profitto / 100€": 18.49,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -183,7 +183,7 @@
       "Partite verifica": 31,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 18.21
+      "Punteggio": 18.2
     },
     {
       "ID": "S14406",
@@ -200,8 +200,8 @@
       "ROI %": 19.6,
       "Utile medio / giocata €": 3.92,
       "Rendimento medio su puntata %": 19.6,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 18.43,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 18.39,
       "Profitto / 100€": 19.6,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -229,8 +229,8 @@
       "ROI %": 15.03,
       "Utile medio / giocata €": 3.01,
       "Rendimento medio su puntata %": 15.03,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 13.86,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 13.82,
       "Profitto / 100€": 15.03,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -241,7 +241,7 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 17.15
+      "Punteggio": 17.14
     },
     {
       "ID": "S05804",
@@ -258,8 +258,8 @@
       "ROI %": 15.03,
       "Utile medio / giocata €": 3.01,
       "Rendimento medio su puntata %": 15.03,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 13.86,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 13.82,
       "Profitto / 100€": 15.03,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -270,7 +270,7 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 17.15
+      "Punteggio": 17.14
     },
     {
       "ID": "S14490",
@@ -287,8 +287,8 @@
       "ROI %": 18.32,
       "Utile medio / giocata €": 3.66,
       "Rendimento medio su puntata %": 18.32,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 17.15,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 17.11,
       "Profitto / 100€": 18.32,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -299,7 +299,7 @@
       "Partite verifica": 29,
       "Validata": "✅",
       "Affidabilità campione %": 96.0,
-      "Punteggio": 17.09
+      "Punteggio": 17.08
     },
     {
       "ID": "S10480",
@@ -316,8 +316,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.51,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.47,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -328,7 +328,7 @@
       "Partite verifica": 37,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 16.23
+      "Punteggio": 16.22
     },
     {
       "ID": "S09872",
@@ -345,8 +345,8 @@
       "ROI %": 11.97,
       "Utile medio / giocata €": 2.39,
       "Rendimento medio su puntata %": 11.97,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 10.79,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 10.75,
       "Profitto / 100€": 11.97,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -357,7 +357,7 @@
       "Partite verifica": 38,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.69
+      "Punteggio": 15.68
     },
     {
       "ID": "S00277",
@@ -374,8 +374,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.51,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.46,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -403,8 +403,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.51,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.46,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -432,8 +432,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.51,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.46,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -461,8 +461,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.51,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.46,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -490,8 +490,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.51,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.46,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -519,8 +519,8 @@
       "ROI %": 12.48,
       "Utile medio / giocata €": 2.5,
       "Rendimento medio su puntata %": 12.48,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.3,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.26,
       "Profitto / 100€": 12.48,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -531,7 +531,7 @@
       "Partite verifica": 49,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.48
+      "Punteggio": 15.47
     },
     {
       "ID": "S06282",
@@ -548,8 +548,8 @@
       "ROI %": 12.48,
       "Utile medio / giocata €": 2.5,
       "Rendimento medio su puntata %": 12.48,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.3,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.26,
       "Profitto / 100€": 12.48,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -560,7 +560,7 @@
       "Partite verifica": 49,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.48
+      "Punteggio": 15.47
     },
     {
       "ID": "S04096",
@@ -577,8 +577,8 @@
       "ROI %": 12.6,
       "Utile medio / giocata €": 2.52,
       "Rendimento medio su puntata %": 12.6,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.43,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.38,
       "Profitto / 100€": 12.6,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -589,7 +589,7 @@
       "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.47
+      "Punteggio": 15.46
     },
     {
       "ID": "S06107",
@@ -606,8 +606,8 @@
       "ROI %": 12.6,
       "Utile medio / giocata €": 2.52,
       "Rendimento medio su puntata %": 12.6,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.43,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.38,
       "Profitto / 100€": 12.6,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -618,7 +618,7 @@
       "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.47
+      "Punteggio": 15.46
     },
     {
       "ID": "S07093",
@@ -635,8 +635,8 @@
       "ROI %": 7.14,
       "Utile medio / giocata €": 1.43,
       "Rendimento medio su puntata %": 7.14,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 5.97,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 5.92,
       "Profitto / 100€": 7.14,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -647,7 +647,7 @@
       "Partite verifica": 127,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.45
+      "Punteggio": 15.44
     },
     {
       "ID": "S04308",
@@ -664,8 +664,8 @@
       "ROI %": 12.94,
       "Utile medio / giocata €": 2.59,
       "Rendimento medio su puntata %": 12.94,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.76,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.72,
       "Profitto / 100€": 12.94,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -676,7 +676,7 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.41
+      "Punteggio": 15.4
     },
     {
       "ID": "S06319",
@@ -693,8 +693,8 @@
       "ROI %": 12.94,
       "Utile medio / giocata €": 2.59,
       "Rendimento medio su puntata %": 12.94,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.76,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.72,
       "Profitto / 100€": 12.94,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -705,7 +705,7 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.41
+      "Punteggio": 15.4
     },
     {
       "ID": "S03904",
@@ -722,8 +722,8 @@
       "ROI %": 14.53,
       "Utile medio / giocata €": 2.91,
       "Rendimento medio su puntata %": 14.53,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 13.36,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 13.31,
       "Profitto / 100€": 14.53,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -734,7 +734,7 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.4
+      "Punteggio": 15.39
     },
     {
       "ID": "S05915",
@@ -751,8 +751,8 @@
       "ROI %": 14.53,
       "Utile medio / giocata €": 2.91,
       "Rendimento medio su puntata %": 14.53,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 13.36,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 13.31,
       "Profitto / 100€": 14.53,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -763,7 +763,7 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.4
+      "Punteggio": 15.39
     },
     {
       "ID": "S14414",
@@ -780,8 +780,8 @@
       "ROI %": 13.03,
       "Utile medio / giocata €": 2.61,
       "Rendimento medio su puntata %": 13.03,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.86,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.82,
       "Profitto / 100€": 13.03,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -809,8 +809,8 @@
       "ROI %": 11.12,
       "Utile medio / giocata €": 2.22,
       "Rendimento medio su puntata %": 11.12,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 9.95,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 9.91,
       "Profitto / 100€": 11.12,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -821,7 +821,7 @@
       "Partite verifica": 56,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.23
+      "Punteggio": 15.22
     },
     {
       "ID": "S06202",
@@ -838,8 +838,8 @@
       "ROI %": 11.12,
       "Utile medio / giocata €": 2.22,
       "Rendimento medio su puntata %": 11.12,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 9.95,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 9.91,
       "Profitto / 100€": 11.12,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -850,7 +850,7 @@
       "Partite verifica": 56,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.23
+      "Punteggio": 15.22
     },
     {
       "ID": "S04053",
@@ -867,8 +867,8 @@
       "ROI %": 12.05,
       "Utile medio / giocata €": 2.41,
       "Rendimento medio su puntata %": 12.05,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 10.88,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 10.83,
       "Profitto / 100€": 12.05,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -879,7 +879,7 @@
       "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.06
+      "Punteggio": 15.05
     },
     {
       "ID": "S06064",
@@ -896,8 +896,8 @@
       "ROI %": 12.05,
       "Utile medio / giocata €": 2.41,
       "Rendimento medio su puntata %": 12.05,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 10.88,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 10.83,
       "Profitto / 100€": 12.05,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -908,7 +908,7 @@
       "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.06
+      "Punteggio": 15.05
     },
     {
       "ID": "S07099",
@@ -925,8 +925,8 @@
       "ROI %": 12.6,
       "Utile medio / giocata €": 2.52,
       "Rendimento medio su puntata %": 12.6,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 11.43,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 11.38,
       "Profitto / 100€": 12.6,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -954,8 +954,8 @@
       "ROI %": 21.45,
       "Utile medio / giocata €": 4.29,
       "Rendimento medio su puntata %": 21.45,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 20.28,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 20.23,
       "Profitto / 100€": 21.45,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -983,8 +983,8 @@
       "ROI %": 21.45,
       "Utile medio / giocata €": 4.29,
       "Rendimento medio su puntata %": 21.45,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 20.28,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 20.23,
       "Profitto / 100€": 21.45,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1012,8 +1012,8 @@
       "ROI %": 11.19,
       "Utile medio / giocata €": 2.24,
       "Rendimento medio su puntata %": 11.19,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 10.02,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 9.97,
       "Profitto / 100€": 11.19,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1024,7 +1024,7 @@
       "Partite verifica": 34,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.94
+      "Punteggio": 14.93
     },
     {
       "ID": "S01211",
@@ -1041,8 +1041,8 @@
       "ROI %": 6.64,
       "Utile medio / giocata €": 1.33,
       "Rendimento medio su puntata %": 6.64,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 5.47,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 5.43,
       "Profitto / 100€": 6.64,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1053,7 +1053,7 @@
       "Partite verifica": 129,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.83
+      "Punteggio": 14.82
     },
     {
       "ID": "S13511",
@@ -1070,8 +1070,8 @@
       "ROI %": 6.64,
       "Utile medio / giocata €": 1.33,
       "Rendimento medio su puntata %": 6.64,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 5.47,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 5.43,
       "Profitto / 100€": 6.64,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1082,7 +1082,7 @@
       "Partite verifica": 129,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.83
+      "Punteggio": 14.82
     },
     {
       "ID": "S14424",
@@ -1099,8 +1099,8 @@
       "ROI %": 8.93,
       "Utile medio / giocata €": 1.79,
       "Rendimento medio su puntata %": 8.93,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 7.76,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 7.72,
       "Profitto / 100€": 8.93,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1111,7 +1111,7 @@
       "Partite verifica": 59,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.82
+      "Punteggio": 14.81
     },
     {
       "ID": "S14525",
@@ -1128,8 +1128,8 @@
       "ROI %": 10.35,
       "Utile medio / giocata €": 2.07,
       "Rendimento medio su puntata %": 10.35,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 9.17,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 9.13,
       "Profitto / 100€": 10.35,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1140,7 +1140,7 @@
       "Partite verifica": 58,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.81
+      "Punteggio": 14.8
     },
     {
       "ID": "S14379",
@@ -1157,8 +1157,8 @@
       "ROI %": 6.57,
       "Utile medio / giocata €": 1.31,
       "Rendimento medio su puntata %": 6.57,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 5.4,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 5.36,
       "Profitto / 100€": 6.57,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1169,7 +1169,7 @@
       "Partite verifica": 128,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.71
+      "Punteggio": 14.7
     },
     {
       "ID": "S12570",
@@ -1186,8 +1186,8 @@
       "ROI %": 6.49,
       "Utile medio / giocata €": 1.3,
       "Rendimento medio su puntata %": 6.49,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 5.32,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 5.27,
       "Profitto / 100€": 6.49,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1215,8 +1215,8 @@
       "ROI %": 9.51,
       "Utile medio / giocata €": 1.9,
       "Rendimento medio su puntata %": 9.51,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 8.34,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 8.3,
       "Profitto / 100€": 9.51,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1227,7 +1227,7 @@
       "Partite verifica": 63,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.32
+      "Punteggio": 14.31
     },
     {
       "ID": "S07075",
@@ -1244,8 +1244,8 @@
       "ROI %": 6.02,
       "Utile medio / giocata €": 1.2,
       "Rendimento medio su puntata %": 6.02,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 4.84,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 4.8,
       "Profitto / 100€": 6.02,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1256,7 +1256,7 @@
       "Partite verifica": 137,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.3
+      "Punteggio": 14.29
     },
     {
       "ID": "S03855",
@@ -1273,8 +1273,8 @@
       "ROI %": 13.6,
       "Utile medio / giocata €": 2.72,
       "Rendimento medio su puntata %": 13.6,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 12.42,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 12.38,
       "Profitto / 100€": 13.6,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1285,7 +1285,7 @@
       "Partite verifica": 27,
       "Validata": "✅",
       "Affidabilità campione %": 89.0,
-      "Punteggio": 14.22
+      "Punteggio": 14.21
     },
     {
       "ID": "S05866",
@@ -1302,8 +1302,8 @@
       "ROI %": 13.6,
       "Utile medio / giocata €": 2.72,
       "Rendimento medio su puntata %": 13.6,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 12.42,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 12.38,
       "Profitto / 100€": 13.6,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1314,7 +1314,7 @@
       "Partite verifica": 27,
       "Validata": "✅",
       "Affidabilità campione %": 89.0,
-      "Punteggio": 14.22
+      "Punteggio": 14.21
     },
     {
       "ID": "S10501",
@@ -1331,8 +1331,8 @@
       "ROI %": 10.49,
       "Utile medio / giocata €": 2.1,
       "Rendimento medio su puntata %": 10.49,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 9.31,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 9.27,
       "Profitto / 100€": 10.49,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1343,36 +1343,7 @@
       "Partite verifica": 34,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.2
-    },
-    {
-      "ID": "S13517",
-      "Strategia": "FLBK=VE + C.FB.=GI + Quota 1.40-1.60",
-      "Partite": 158,
-      "Max partite in un giorno": 9,
-      "Attendibilità": "🟢 Abbastanza solida",
-      "Vinte": 120,
-      "Perse": 38,
-      "Win rate %": 75.95,
-      "Quota media": 1.47,
-      "Puntato €": 3160.0,
-      "Profitto €": 349.0,
-      "ROI %": 11.04,
-      "Utile medio / giocata €": 2.21,
-      "Rendimento medio su puntata %": 11.04,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 9.87,
-      "Profitto / 100€": 11.04,
-      "Max perdite consecutive": 3,
-      "Blocchi positivi": "3/3",
-      "Stabilità %": 100.0,
-      "Peggior ROI blocco %": 0.58,
-      "ROI ricerca %": 8.85,
-      "ROI verifica %": 16.06,
-      "Partite verifica": 48,
-      "Validata": "✅",
-      "Affidabilità campione %": 100.0,
-      "Punteggio": 14.09
+      "Punteggio": 14.19
     },
     {
       "ID": "S11556",
@@ -1389,8 +1360,8 @@
       "ROI %": 6.18,
       "Utile medio / giocata €": 1.24,
       "Rendimento medio su puntata %": 6.18,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 5.01,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 4.97,
       "Profitto / 100€": 6.18,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1399,6 +1370,35 @@
       "ROI ricerca %": 4.18,
       "ROI verifica %": 10.82,
       "Partite verifica": 127,
+      "Validata": "✅",
+      "Affidabilità campione %": 100.0,
+      "Punteggio": 14.08
+    },
+    {
+      "ID": "S13517",
+      "Strategia": "FLBK=VE + C.FB.=GI + Quota 1.40-1.60",
+      "Partite": 158,
+      "Max partite in un giorno": 9,
+      "Attendibilità": "🟢 Abbastanza solida",
+      "Vinte": 120,
+      "Perse": 38,
+      "Win rate %": 75.95,
+      "Quota media": 1.47,
+      "Puntato €": 3160.0,
+      "Profitto €": 349.0,
+      "ROI %": 11.04,
+      "Utile medio / giocata €": 2.21,
+      "Rendimento medio su puntata %": 11.04,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 9.83,
+      "Profitto / 100€": 11.04,
+      "Max perdite consecutive": 3,
+      "Blocchi positivi": "3/3",
+      "Stabilità %": 100.0,
+      "Peggior ROI blocco %": 0.58,
+      "ROI ricerca %": 8.85,
+      "ROI verifica %": 16.06,
+      "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
       "Punteggio": 14.08
@@ -1418,8 +1418,8 @@
       "ROI %": 9.15,
       "Utile medio / giocata €": 1.83,
       "Rendimento medio su puntata %": 9.15,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 7.98,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 7.94,
       "Profitto / 100€": 9.15,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1430,7 +1430,7 @@
       "Partite verifica": 65,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.04
+      "Punteggio": 14.03
     },
     {
       "ID": "S06195",
@@ -1447,8 +1447,8 @@
       "ROI %": 9.15,
       "Utile medio / giocata €": 1.83,
       "Rendimento medio su puntata %": 9.15,
-      "ROI base %": 1.17,
-      "Δ ROI vs base": 7.98,
+      "ROI base %": 1.22,
+      "Δ ROI vs base": 7.94,
       "Profitto / 100€": 9.15,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1459,7 +1459,7 @@
       "Partite verifica": 65,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.04
+      "Punteggio": 14.03
     }
   ],
   "selections": {
