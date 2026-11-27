@@ -1,18 +1,18 @@
 {
-  "generated_at": "2026-11-26T15:42:57.794207+00:00",
-  "engine_signature": "99ed346b7d668c2bd3a1852d331f90565152e6b3a9328de7c1d7d013045b5c18",
-  "closed_matches": 1410,
-  "snapshot_count": 182,
+  "generated_at": "2026-11-27T03:48:40.916601+00:00",
+  "engine_signature": "2acbffc490b7fd654c4f7e14b6bade8c77823c2642ac6f4d92c7b8d978f0c49e",
+  "closed_matches": 1421,
+  "snapshot_count": 183,
   "history_result": {
     "ok": true,
-    "saved": false,
-    "message": "Classifica invariata: snapshot non duplicato."
+    "saved": true,
+    "message": "Nuovo snapshot salvato: 50 strategie."
   },
-  "follow_message": "Nessun dato nuovo: stato Elite invariato.",
+  "follow_message": "Nessuno sfidante ha prove sufficienti: continua con l'Elite attuale.",
   "operational_label": "✅ DA SEGUIRE",
   "ranking": [
     {
-      "ID": "S07093",
+      "ID": "S07096",
       "Strategia": "MTR=VE + C.FB.=GI + Quota 1.40-1.49",
       "Partite": 102,
       "Max partite in un giorno": 6,
@@ -26,8 +26,8 @@
       "ROI %": 21.08,
       "Utile medio / giocata €": 4.22,
       "Rendimento medio su puntata %": 21.08,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 19.87,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 20.04,
       "Profitto / 100€": 21.08,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -38,10 +38,10 @@
       "Partite verifica": 31,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 20.02
+      "Punteggio": 20.05
     },
     {
-      "ID": "S12574",
+      "ID": "S12580",
       "Strategia": "C.AFF.=VE + C.FB.=GI + Quota 1.40-1.49",
       "Partite": 103,
       "Max partite in un giorno": 7,
@@ -55,8 +55,8 @@
       "ROI %": 19.98,
       "Utile medio / giocata €": 4.0,
       "Rendimento medio su puntata %": 19.98,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 18.77,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 18.94,
       "Profitto / 100€": 19.98,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -67,7 +67,7 @@
       "Partite verifica": 31,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 19.27
+      "Punteggio": 19.3
     },
     {
       "ID": "S01208",
@@ -84,8 +84,8 @@
       "ROI %": 19.26,
       "Utile medio / giocata €": 3.85,
       "Rendimento medio su puntata %": 19.26,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 18.05,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 18.22,
       "Profitto / 100€": 19.26,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -96,10 +96,10 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 18.89
+      "Punteggio": 18.92
     },
     {
-      "ID": "S13515",
+      "ID": "S13522",
       "Strategia": "FLBK=VE + C.FB.=GI + Quota 1.40-1.49",
       "Partite": 106,
       "Max partite in un giorno": 7,
@@ -113,8 +113,8 @@
       "ROI %": 19.26,
       "Utile medio / giocata €": 3.85,
       "Rendimento medio su puntata %": 19.26,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 18.05,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 18.22,
       "Profitto / 100€": 19.26,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -125,10 +125,10 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 18.89
+      "Punteggio": 18.92
     },
     {
-      "ID": "S14383",
+      "ID": "S14391",
       "Strategia": "C.FB.=GI + QRA/QA=VE + Quota 1.40-1.49",
       "Partite": 106,
       "Max partite in un giorno": 7,
@@ -142,8 +142,8 @@
       "ROI %": 19.26,
       "Utile medio / giocata €": 3.85,
       "Rendimento medio su puntata %": 19.26,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 18.05,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 18.22,
       "Profitto / 100€": 19.26,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -154,10 +154,10 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 18.89
+      "Punteggio": 18.92
     },
     {
-      "ID": "S11560",
+      "ID": "S11565",
       "Strategia": "STATUS=VE + C.FB.=GI + Quota 1.40-1.49",
       "Partite": 103,
       "Max partite in un giorno": 7,
@@ -171,8 +171,8 @@
       "ROI %": 18.49,
       "Utile medio / giocata €": 3.7,
       "Rendimento medio su puntata %": 18.49,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 17.28,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 17.44,
       "Profitto / 100€": 18.49,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -183,10 +183,10 @@
       "Partite verifica": 31,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 18.2
+      "Punteggio": 18.23
     },
     {
-      "ID": "S14412",
+      "ID": "S14420",
       "Strategia": "C.FB.=GI + QI/QA=VE + Quota 1.40-1.49",
       "Partite": 96,
       "Max partite in un giorno": 7,
@@ -200,8 +200,8 @@
       "ROI %": 19.6,
       "Utile medio / giocata €": 3.92,
       "Rendimento medio su puntata %": 19.6,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 18.39,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 18.56,
       "Profitto / 100€": 19.6,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -212,10 +212,10 @@
       "Partite verifica": 29,
       "Validata": "✅",
       "Affidabilità campione %": 96.0,
-      "Punteggio": 17.96
+      "Punteggio": 17.99
     },
     {
-      "ID": "S03794",
+      "ID": "S03796",
       "Strategia": "ALLB colore=VE + MTR=VE + Quota 1.40-1.49",
       "Partite": 146,
       "Max partite in un giorno": 11,
@@ -229,8 +229,8 @@
       "ROI %": 15.03,
       "Utile medio / giocata €": 3.01,
       "Rendimento medio su puntata %": 15.03,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 13.83,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 13.99,
       "Profitto / 100€": 15.03,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -241,10 +241,10 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 17.14
+      "Punteggio": 17.18
     },
     {
-      "ID": "S05806",
+      "ID": "S05809",
       "Strategia": "ALLB indicatore=VE + MTR=VE + Quota 1.40-1.49",
       "Partite": 146,
       "Max partite in un giorno": 11,
@@ -258,8 +258,8 @@
       "ROI %": 15.03,
       "Utile medio / giocata €": 3.01,
       "Rendimento medio su puntata %": 15.03,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 13.83,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 13.99,
       "Profitto / 100€": 15.03,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -270,10 +270,10 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 17.14
+      "Punteggio": 17.18
     },
     {
-      "ID": "S14496",
+      "ID": "S14504",
       "Strategia": "C.FB.=GI + C.AFF. comparazioni ≥501 + Quota 1.40-1.49",
       "Partite": 96,
       "Max partite in un giorno": 7,
@@ -287,8 +287,8 @@
       "ROI %": 18.32,
       "Utile medio / giocata €": 3.66,
       "Rendimento medio su puntata %": 18.32,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 17.11,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 17.28,
       "Profitto / 100€": 18.32,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -299,10 +299,10 @@
       "Partite verifica": 29,
       "Validata": "✅",
       "Affidabilità campione %": 96.0,
-      "Punteggio": 17.08
+      "Punteggio": 17.11
     },
     {
-      "ID": "S10482",
+      "ID": "S10487",
       "Strategia": "CAL=VE + C.AFF. comparazioni ≥501 + Quota scesa >=5%",
       "Partite": 123,
       "Max partite in un giorno": 8,
@@ -316,8 +316,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.47,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.64,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -328,10 +328,10 @@
       "Partite verifica": 37,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 16.22
+      "Punteggio": 16.26
     },
     {
-      "ID": "S09874",
+      "ID": "S09879",
       "Strategia": "CAL=VE + C.AFF.=VE + Quota scesa >=5%",
       "Partite": 125,
       "Max partite in un giorno": 8,
@@ -345,8 +345,8 @@
       "ROI %": 11.97,
       "Utile medio / giocata €": 2.39,
       "Rendimento medio su puntata %": 11.97,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 10.76,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 10.93,
       "Profitto / 100€": 11.97,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -357,7 +357,7 @@
       "Partite verifica": 38,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.68
+      "Punteggio": 15.72
     },
     {
       "ID": "S00277",
@@ -374,8 +374,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.47,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.64,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -386,7 +386,7 @@
       "Partite verifica": 49,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.67
+      "Punteggio": 15.7
     },
     {
       "ID": "S00433",
@@ -403,8 +403,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.47,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.64,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -415,10 +415,10 @@
       "Partite verifica": 49,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.67
+      "Punteggio": 15.7
     },
     {
-      "ID": "S03744",
+      "ID": "S03746",
       "Strategia": "ALLB colore=VE + ALLB indicatore=VE + Quota 1.40-1.49",
       "Partite": 162,
       "Max partite in un giorno": 11,
@@ -432,8 +432,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.47,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.64,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -444,10 +444,10 @@
       "Partite verifica": 49,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.67
+      "Punteggio": 15.7
     },
     {
-      "ID": "S04163",
+      "ID": "S04165",
       "Strategia": "ALLB colore=VE + FLBK=VE + Quota 1.40-1.49",
       "Partite": 162,
       "Max partite in un giorno": 11,
@@ -461,8 +461,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.47,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.64,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -473,10 +473,10 @@
       "Partite verifica": 49,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.67
+      "Punteggio": 15.7
     },
     {
-      "ID": "S06175",
+      "ID": "S06178",
       "Strategia": "ALLB indicatore=VE + FLBK=VE + Quota 1.40-1.49",
       "Partite": 162,
       "Max partite in un giorno": 11,
@@ -490,8 +490,8 @@
       "ROI %": 12.68,
       "Utile medio / giocata €": 2.54,
       "Rendimento medio su puntata %": 12.68,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.47,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.64,
       "Profitto / 100€": 12.68,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -502,10 +502,10 @@
       "Partite verifica": 49,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.67
+      "Punteggio": 15.7
     },
     {
-      "ID": "S04272",
+      "ID": "S04274",
       "Strategia": "ALLB colore=VE + QRA/QA=VE + Quota 1.40-1.49",
       "Partite": 161,
       "Max partite in un giorno": 11,
@@ -519,8 +519,8 @@
       "ROI %": 12.48,
       "Utile medio / giocata €": 2.5,
       "Rendimento medio su puntata %": 12.48,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.27,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.44,
       "Profitto / 100€": 12.48,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -531,10 +531,10 @@
       "Partite verifica": 49,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.47
+      "Punteggio": 15.5
     },
     {
-      "ID": "S06284",
+      "ID": "S06287",
       "Strategia": "ALLB indicatore=VE + QRA/QA=VE + Quota 1.40-1.49",
       "Partite": 161,
       "Max partite in un giorno": 11,
@@ -548,8 +548,8 @@
       "ROI %": 12.48,
       "Utile medio / giocata €": 2.5,
       "Rendimento medio su puntata %": 12.48,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.27,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.44,
       "Profitto / 100€": 12.48,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -560,10 +560,10 @@
       "Partite verifica": 49,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.47
+      "Punteggio": 15.5
     },
     {
-      "ID": "S04097",
+      "ID": "S04099",
       "Strategia": "ALLB colore=VE + C.AFF.=VE + Quota 1.40-1.49",
       "Partite": 157,
       "Max partite in un giorno": 11,
@@ -577,8 +577,8 @@
       "ROI %": 12.6,
       "Utile medio / giocata €": 2.52,
       "Rendimento medio su puntata %": 12.6,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.39,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.56,
       "Profitto / 100€": 12.6,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -589,10 +589,10 @@
       "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.46
+      "Punteggio": 15.49
     },
     {
-      "ID": "S06109",
+      "ID": "S06112",
       "Strategia": "ALLB indicatore=VE + C.AFF.=VE + Quota 1.40-1.49",
       "Partite": 157,
       "Max partite in un giorno": 11,
@@ -606,8 +606,8 @@
       "ROI %": 12.6,
       "Utile medio / giocata €": 2.52,
       "Rendimento medio su puntata %": 12.6,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.39,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.56,
       "Profitto / 100€": 12.6,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -618,10 +618,10 @@
       "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.46
+      "Punteggio": 15.49
     },
     {
-      "ID": "S07095",
+      "ID": "S07098",
       "Strategia": "MTR=VE + C.FB.=GI + Quota 1.20-1.50",
       "Partite": 421,
       "Max partite in un giorno": 21,
@@ -635,8 +635,8 @@
       "ROI %": 7.14,
       "Utile medio / giocata €": 1.43,
       "Rendimento medio su puntata %": 7.14,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 5.93,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 6.1,
       "Profitto / 100€": 7.14,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -647,10 +647,10 @@
       "Partite verifica": 127,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.44
+      "Punteggio": 15.48
     },
     {
-      "ID": "S04309",
+      "ID": "S04311",
       "Strategia": "ALLB colore=VE + QI/QA=VE + Quota 1.40-1.49",
       "Partite": 145,
       "Max partite in un giorno": 10,
@@ -664,8 +664,8 @@
       "ROI %": 12.94,
       "Utile medio / giocata €": 2.59,
       "Rendimento medio su puntata %": 12.94,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.73,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.9,
       "Profitto / 100€": 12.94,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -676,10 +676,10 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.4
+      "Punteggio": 15.44
     },
     {
-      "ID": "S06321",
+      "ID": "S06324",
       "Strategia": "ALLB indicatore=VE + QI/QA=VE + Quota 1.40-1.49",
       "Partite": 145,
       "Max partite in un giorno": 10,
@@ -693,8 +693,8 @@
       "ROI %": 12.94,
       "Utile medio / giocata €": 2.59,
       "Rendimento medio su puntata %": 12.94,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.73,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.9,
       "Profitto / 100€": 12.94,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -705,10 +705,10 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.4
+      "Punteggio": 15.44
     },
     {
-      "ID": "S03905",
+      "ID": "S03907",
       "Strategia": "ALLB colore=VE + SCL=VE + Quota 1.40-1.49",
       "Partite": 104,
       "Max partite in un giorno": 5,
@@ -722,8 +722,8 @@
       "ROI %": 14.53,
       "Utile medio / giocata €": 2.91,
       "Rendimento medio su puntata %": 14.53,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 13.32,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 13.49,
       "Profitto / 100€": 14.53,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -734,10 +734,10 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.39
+      "Punteggio": 15.42
     },
     {
-      "ID": "S05917",
+      "ID": "S05920",
       "Strategia": "ALLB indicatore=VE + SCL=VE + Quota 1.40-1.49",
       "Partite": 104,
       "Max partite in un giorno": 5,
@@ -751,8 +751,8 @@
       "ROI %": 14.53,
       "Utile medio / giocata €": 2.91,
       "Rendimento medio su puntata %": 14.53,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 13.32,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 13.49,
       "Profitto / 100€": 14.53,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -763,10 +763,10 @@
       "Partite verifica": 32,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.39
+      "Punteggio": 15.42
     },
     {
-      "ID": "S14420",
+      "ID": "S14428",
       "Strategia": "C.FB.=GI + QI/QA=VE + Quota 1.40-1.60",
       "Partite": 145,
       "Max partite in un giorno": 9,
@@ -780,8 +780,8 @@
       "ROI %": 13.03,
       "Utile medio / giocata €": 2.61,
       "Rendimento medio su puntata %": 13.03,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.83,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.99,
       "Profitto / 100€": 13.03,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -792,10 +792,10 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.38
+      "Punteggio": 15.41
     },
     {
-      "ID": "S04192",
+      "ID": "S04194",
       "Strategia": "ALLB colore=VE + C.FB.=GI + Quota 1.20-1.50",
       "Partite": 186,
       "Max partite in un giorno": 14,
@@ -809,8 +809,8 @@
       "ROI %": 11.12,
       "Utile medio / giocata €": 2.22,
       "Rendimento medio su puntata %": 11.12,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 9.91,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 10.08,
       "Profitto / 100€": 11.12,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -821,10 +821,10 @@
       "Partite verifica": 56,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.22
+      "Punteggio": 15.25
     },
     {
-      "ID": "S06204",
+      "ID": "S06207",
       "Strategia": "ALLB indicatore=VE + C.FB.=GI + Quota 1.20-1.50",
       "Partite": 186,
       "Max partite in un giorno": 14,
@@ -838,8 +838,8 @@
       "ROI %": 11.12,
       "Utile medio / giocata €": 2.22,
       "Rendimento medio su puntata %": 11.12,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 9.91,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 10.08,
       "Profitto / 100€": 11.12,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -850,10 +850,10 @@
       "Partite verifica": 56,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.22
+      "Punteggio": 15.25
     },
     {
-      "ID": "S04054",
+      "ID": "S04056",
       "Strategia": "ALLB colore=VE + STATUS=VE + Quota 1.40-1.49",
       "Partite": 159,
       "Max partite in un giorno": 10,
@@ -867,8 +867,8 @@
       "ROI %": 12.05,
       "Utile medio / giocata €": 2.41,
       "Rendimento medio su puntata %": 12.05,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 10.84,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.01,
       "Profitto / 100€": 12.05,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -879,10 +879,10 @@
       "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.05
+      "Punteggio": 15.09
     },
     {
-      "ID": "S06066",
+      "ID": "S06069",
       "Strategia": "ALLB indicatore=VE + STATUS=VE + Quota 1.40-1.49",
       "Partite": 159,
       "Max partite in un giorno": 10,
@@ -896,8 +896,8 @@
       "ROI %": 12.05,
       "Utile medio / giocata €": 2.41,
       "Rendimento medio su puntata %": 12.05,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 10.84,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.01,
       "Profitto / 100€": 12.05,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -908,10 +908,10 @@
       "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.05
+      "Punteggio": 15.09
     },
     {
-      "ID": "S07101",
+      "ID": "S07104",
       "Strategia": "MTR=VE + C.FB.=GI + Quota 1.40-1.60",
       "Partite": 145,
       "Max partite in un giorno": 8,
@@ -925,8 +925,8 @@
       "ROI %": 12.6,
       "Utile medio / giocata €": 2.52,
       "Rendimento medio su puntata %": 12.6,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 11.39,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 11.56,
       "Profitto / 100€": 12.6,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -937,68 +937,10 @@
       "Partite verifica": 44,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 15.05
+      "Punteggio": 15.08
     },
     {
-      "ID": "S04190",
-      "Strategia": "ALLB colore=VE + C.FB.=GI + Quota 1.40-1.49",
-      "Partite": 78,
-      "Max partite in un giorno": 5,
-      "Attendibilità": "🟡 Interessante",
-      "Vinte": 66,
-      "Perse": 12,
-      "Win rate %": 84.62,
-      "Quota media": 1.44,
-      "Puntato €": 1560.0,
-      "Profitto €": 334.6,
-      "ROI %": 21.45,
-      "Utile medio / giocata €": 4.29,
-      "Rendimento medio su puntata %": 21.45,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 20.24,
-      "Profitto / 100€": 21.45,
-      "Max perdite consecutive": 3,
-      "Blocchi positivi": "3/3",
-      "Stabilità %": 100.0,
-      "Peggior ROI blocco %": 10.08,
-      "ROI ricerca %": 17.09,
-      "ROI verifica %": 31.25,
-      "Partite verifica": 24,
-      "Validata": "✅",
-      "Affidabilità campione %": 78.0,
-      "Punteggio": 14.94
-    },
-    {
-      "ID": "S06202",
-      "Strategia": "ALLB indicatore=VE + C.FB.=GI + Quota 1.40-1.49",
-      "Partite": 78,
-      "Max partite in un giorno": 5,
-      "Attendibilità": "🟡 Interessante",
-      "Vinte": 66,
-      "Perse": 12,
-      "Win rate %": 84.62,
-      "Quota media": 1.44,
-      "Puntato €": 1560.0,
-      "Profitto €": 334.6,
-      "ROI %": 21.45,
-      "Utile medio / giocata €": 4.29,
-      "Rendimento medio su puntata %": 21.45,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 20.24,
-      "Profitto / 100€": 21.45,
-      "Max perdite consecutive": 3,
-      "Blocchi positivi": "3/3",
-      "Stabilità %": 100.0,
-      "Peggior ROI blocco %": 10.08,
-      "ROI ricerca %": 17.09,
-      "ROI verifica %": 31.25,
-      "Partite verifica": 24,
-      "Validata": "✅",
-      "Affidabilità campione %": 78.0,
-      "Punteggio": 14.94
-    },
-    {
-      "ID": "S10706",
+      "ID": "S10711",
       "Strategia": "CAL=GI + C.FB.=GI + Quota 1.20-1.50",
       "Partite": 111,
       "Max partite in un giorno": 9,
@@ -1012,8 +954,8 @@
       "ROI %": 11.19,
       "Utile medio / giocata €": 2.24,
       "Rendimento medio su puntata %": 11.19,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 9.98,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 10.15,
       "Profitto / 100€": 11.19,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1024,7 +966,65 @@
       "Partite verifica": 34,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.93
+      "Punteggio": 14.97
+    },
+    {
+      "ID": "S04192",
+      "Strategia": "ALLB colore=VE + C.FB.=GI + Quota 1.40-1.49",
+      "Partite": 78,
+      "Max partite in un giorno": 5,
+      "Attendibilità": "🟡 Interessante",
+      "Vinte": 66,
+      "Perse": 12,
+      "Win rate %": 84.62,
+      "Quota media": 1.44,
+      "Puntato €": 1560.0,
+      "Profitto €": 334.6,
+      "ROI %": 21.45,
+      "Utile medio / giocata €": 4.29,
+      "Rendimento medio su puntata %": 21.45,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 20.41,
+      "Profitto / 100€": 21.45,
+      "Max perdite consecutive": 3,
+      "Blocchi positivi": "3/3",
+      "Stabilità %": 100.0,
+      "Peggior ROI blocco %": 10.08,
+      "ROI ricerca %": 17.09,
+      "ROI verifica %": 31.25,
+      "Partite verifica": 24,
+      "Validata": "✅",
+      "Affidabilità campione %": 78.0,
+      "Punteggio": 14.96
+    },
+    {
+      "ID": "S06205",
+      "Strategia": "ALLB indicatore=VE + C.FB.=GI + Quota 1.40-1.49",
+      "Partite": 78,
+      "Max partite in un giorno": 5,
+      "Attendibilità": "🟡 Interessante",
+      "Vinte": 66,
+      "Perse": 12,
+      "Win rate %": 84.62,
+      "Quota media": 1.44,
+      "Puntato €": 1560.0,
+      "Profitto €": 334.6,
+      "ROI %": 21.45,
+      "Utile medio / giocata €": 4.29,
+      "Rendimento medio su puntata %": 21.45,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 20.41,
+      "Profitto / 100€": 21.45,
+      "Max perdite consecutive": 3,
+      "Blocchi positivi": "3/3",
+      "Stabilità %": 100.0,
+      "Peggior ROI blocco %": 10.08,
+      "ROI ricerca %": 17.09,
+      "ROI verifica %": 31.25,
+      "Partite verifica": 24,
+      "Validata": "✅",
+      "Affidabilità campione %": 78.0,
+      "Punteggio": 14.96
     },
     {
       "ID": "S01211",
@@ -1041,8 +1041,8 @@
       "ROI %": 6.64,
       "Utile medio / giocata €": 1.33,
       "Rendimento medio su puntata %": 6.64,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 5.43,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 5.6,
       "Profitto / 100€": 6.64,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1053,10 +1053,10 @@
       "Partite verifica": 129,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.82
+      "Punteggio": 14.85
     },
     {
-      "ID": "S13517",
+      "ID": "S13524",
       "Strategia": "FLBK=VE + C.FB.=GI + Quota 1.20-1.50",
       "Partite": 427,
       "Max partite in un giorno": 21,
@@ -1070,8 +1070,8 @@
       "ROI %": 6.64,
       "Utile medio / giocata €": 1.33,
       "Rendimento medio su puntata %": 6.64,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 5.43,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 5.6,
       "Profitto / 100€": 6.64,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1082,10 +1082,10 @@
       "Partite verifica": 129,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.82
+      "Punteggio": 14.85
     },
     {
-      "ID": "S14430",
+      "ID": "S14438",
       "Strategia": "C.FB.=GI + QI/QA=VE + Value negativo",
       "Partite": 196,
       "Max partite in un giorno": 9,
@@ -1099,8 +1099,8 @@
       "ROI %": 8.93,
       "Utile medio / giocata €": 1.79,
       "Rendimento medio su puntata %": 8.93,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 7.72,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 7.89,
       "Profitto / 100€": 8.93,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1111,10 +1111,10 @@
       "Partite verifica": 59,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.82
+      "Punteggio": 14.85
     },
     {
-      "ID": "S14531",
+      "ID": "S14539",
       "Strategia": "C.FB.=GI + Quota 1.20-1.50 + Value negativo",
       "Partite": 193,
       "Max partite in un giorno": 10,
@@ -1128,8 +1128,8 @@
       "ROI %": 10.35,
       "Utile medio / giocata €": 2.07,
       "Rendimento medio su puntata %": 10.35,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 9.14,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 9.31,
       "Profitto / 100€": 10.35,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1140,10 +1140,10 @@
       "Partite verifica": 58,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.81
+      "Punteggio": 14.84
     },
     {
-      "ID": "S14385",
+      "ID": "S14393",
       "Strategia": "C.FB.=GI + QRA/QA=VE + Quota 1.20-1.50",
       "Partite": 426,
       "Max partite in un giorno": 21,
@@ -1157,8 +1157,8 @@
       "ROI %": 6.57,
       "Utile medio / giocata €": 1.31,
       "Rendimento medio su puntata %": 6.57,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 5.36,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 5.53,
       "Profitto / 100€": 6.57,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1169,10 +1169,10 @@
       "Partite verifica": 128,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.71
+      "Punteggio": 14.74
     },
     {
-      "ID": "S12576",
+      "ID": "S12582",
       "Strategia": "C.AFF.=VE + C.FB.=GI + Quota 1.20-1.50",
       "Partite": 421,
       "Max partite in un giorno": 21,
@@ -1186,8 +1186,8 @@
       "ROI %": 6.49,
       "Utile medio / giocata €": 1.3,
       "Rendimento medio su puntata %": 6.49,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 5.28,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 5.45,
       "Profitto / 100€": 6.49,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1198,10 +1198,10 @@
       "Partite verifica": 127,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.52
+      "Punteggio": 14.55
     },
     {
-      "ID": "S07111",
+      "ID": "S07114",
       "Strategia": "MTR=VE + C.FB.=GI + Value negativo",
       "Partite": 208,
       "Max partite in un giorno": 10,
@@ -1215,8 +1215,8 @@
       "ROI %": 9.51,
       "Utile medio / giocata €": 1.9,
       "Rendimento medio su puntata %": 9.51,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 8.31,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 8.47,
       "Profitto / 100€": 9.51,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1227,10 +1227,10 @@
       "Partite verifica": 63,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.31
+      "Punteggio": 14.35
     },
     {
-      "ID": "S07077",
+      "ID": "S07080",
       "Strategia": "MTR=VE + C.FB.=GI + QRA/QA=VE",
       "Partite": 456,
       "Max partite in un giorno": 21,
@@ -1244,8 +1244,8 @@
       "ROI %": 6.02,
       "Utile medio / giocata €": 1.2,
       "Rendimento medio su puntata %": 6.02,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 4.81,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 4.98,
       "Profitto / 100€": 6.02,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1256,10 +1256,10 @@
       "Partite verifica": 137,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.29
+      "Punteggio": 14.32
     },
     {
-      "ID": "S03856",
+      "ID": "S03858",
       "Strategia": "ALLB colore=VE + SCL=GI + C.FB.=GI",
       "Partite": 89,
       "Max partite in un giorno": 8,
@@ -1273,8 +1273,8 @@
       "ROI %": 13.6,
       "Utile medio / giocata €": 2.72,
       "Rendimento medio su puntata %": 13.6,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 12.39,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 12.55,
       "Profitto / 100€": 13.6,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1285,10 +1285,10 @@
       "Partite verifica": 27,
       "Validata": "✅",
       "Affidabilità campione %": 89.0,
-      "Punteggio": 14.21
+      "Punteggio": 14.24
     },
     {
-      "ID": "S05868",
+      "ID": "S05871",
       "Strategia": "ALLB indicatore=VE + SCL=GI + C.FB.=GI",
       "Partite": 89,
       "Max partite in un giorno": 8,
@@ -1302,8 +1302,8 @@
       "ROI %": 13.6,
       "Utile medio / giocata €": 2.72,
       "Rendimento medio su puntata %": 13.6,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 12.39,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 12.55,
       "Profitto / 100€": 13.6,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1314,10 +1314,10 @@
       "Partite verifica": 27,
       "Validata": "✅",
       "Affidabilità campione %": 89.0,
-      "Punteggio": 14.21
+      "Punteggio": 14.24
     },
     {
-      "ID": "S10503",
+      "ID": "S10508",
       "Strategia": "CAL=VE + Quota 1.20-1.50 + Quota scesa >=5%",
       "Partite": 113,
       "Max partite in un giorno": 9,
@@ -1331,8 +1331,8 @@
       "ROI %": 10.49,
       "Utile medio / giocata €": 2.1,
       "Rendimento medio su puntata %": 10.49,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 9.28,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 9.45,
       "Profitto / 100€": 10.49,
       "Max perdite consecutive": 2,
       "Blocchi positivi": "3/3",
@@ -1343,10 +1343,10 @@
       "Partite verifica": 34,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.19
+      "Punteggio": 14.23
     },
     {
-      "ID": "S11562",
+      "ID": "S11567",
       "Strategia": "STATUS=VE + C.FB.=GI + Quota 1.20-1.50",
       "Partite": 421,
       "Max partite in un giorno": 20,
@@ -1360,8 +1360,8 @@
       "ROI %": 6.18,
       "Utile medio / giocata €": 1.24,
       "Rendimento medio su puntata %": 6.18,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 4.97,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 5.14,
       "Profitto / 100€": 6.18,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1372,10 +1372,10 @@
       "Partite verifica": 127,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.08
+      "Punteggio": 14.11
     },
     {
-      "ID": "S13523",
+      "ID": "S13530",
       "Strategia": "FLBK=VE + C.FB.=GI + Quota 1.40-1.60",
       "Partite": 158,
       "Max partite in un giorno": 9,
@@ -1389,8 +1389,8 @@
       "ROI %": 11.04,
       "Utile medio / giocata €": 2.21,
       "Rendimento medio su puntata %": 11.04,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 9.84,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 10.0,
       "Profitto / 100€": 11.04,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1401,10 +1401,10 @@
       "Partite verifica": 48,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.08
+      "Punteggio": 14.11
     },
     {
-      "ID": "S04185",
+      "ID": "S04187",
       "Strategia": "ALLB colore=VE + C.FB.=GI + QRA/QA=VE",
       "Partite": 216,
       "Max partite in un giorno": 14,
@@ -1418,8 +1418,8 @@
       "ROI %": 9.15,
       "Utile medio / giocata €": 1.83,
       "Rendimento medio su puntata %": 9.15,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 7.94,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 8.11,
       "Profitto / 100€": 9.15,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1430,10 +1430,10 @@
       "Partite verifica": 65,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.03
+      "Punteggio": 14.06
     },
     {
-      "ID": "S06197",
+      "ID": "S06200",
       "Strategia": "ALLB indicatore=VE + C.FB.=GI + QRA/QA=VE",
       "Partite": 216,
       "Max partite in un giorno": 14,
@@ -1447,8 +1447,8 @@
       "ROI %": 9.15,
       "Utile medio / giocata €": 1.83,
       "Rendimento medio su puntata %": 9.15,
-      "ROI base %": 1.21,
-      "Δ ROI vs base": 7.94,
+      "ROI base %": 1.04,
+      "Δ ROI vs base": 8.11,
       "Profitto / 100€": 9.15,
       "Max perdite consecutive": 3,
       "Blocchi positivi": "3/3",
@@ -1459,7 +1459,7 @@
       "Partite verifica": 65,
       "Validata": "✅",
       "Affidabilità campione %": 100.0,
-      "Punteggio": 14.03
+      "Punteggio": 14.06
     }
   ],
   "selections": {
@@ -2328,7 +2328,7 @@
       1401,
       1408
     ],
-    "S03744": [
+    "S03746": [
       4,
       15,
       23,
@@ -2492,7 +2492,7 @@
       1398,
       1402
     ],
-    "S03794": [
+    "S03796": [
       4,
       30,
       35,
@@ -2640,7 +2640,7 @@
       1398,
       1402
     ],
-    "S03856": [
+    "S03858": [
       128,
       248,
       280,
@@ -2731,7 +2731,7 @@
       1372,
       1398
     ],
-    "S03905": [
+    "S03907": [
       4,
       15,
       23,
@@ -2837,7 +2837,7 @@
       1391,
       1402
     ],
-    "S04054": [
+    "S04056": [
       4,
       15,
       23,
@@ -2998,7 +2998,7 @@
       1398,
       1402
     ],
-    "S04097": [
+    "S04099": [
       4,
       15,
       30,
@@ -3157,7 +3157,7 @@
       1398,
       1402
     ],
-    "S04163": [
+    "S04165": [
       4,
       15,
       23,
@@ -3321,7 +3321,7 @@
       1398,
       1402
     ],
-    "S04185": [
+    "S04187": [
       4,
       18,
       30,
@@ -3538,89 +3538,89 @@
       1372,
       1398,
       1404
-    ],
-    "S04190": [
-      4,
-      30,
-      35,
-      41,
-      43,
-      63,
-      85,
-      108,
-      156,
-      166,
-      175,
-      186,
-      206,
-      220,
-      247,
-      252,
-      270,
-      274,
-      278,
-      279,
-      292,
-      298,
-      303,
-      315,
-      325,
-      348,
-      360,
-      366,
-      383,
-      398,
-      406,
-      453,
-      458,
-      460,
-      461,
-      516,
-      518,
-      528,
-      529,
-      535,
-      552,
-      556,
-      564,
-      565,
-      614,
-      636,
-      659,
-      669,
-      677,
-      721,
-      723,
-      725,
-      816,
-      863,
-      933,
-      939,
-      963,
-      996,
-      1017,
-      1042,
-      1045,
-      1046,
-      1049,
-      1075,
-      1088,
-      1098,
-      1158,
-      1171,
-      1188,
-      1196,
-      1226,
-      1243,
-      1281,
-      1292,
-      1296,
-      1325,
-      1344,
-      1398
     ],
     "S04192": [
       4,
+      30,
+      35,
+      41,
+      43,
+      63,
+      85,
+      108,
+      156,
+      166,
+      175,
+      186,
+      206,
+      220,
+      247,
+      252,
+      270,
+      274,
+      278,
+      279,
+      292,
+      298,
+      303,
+      315,
+      325,
+      348,
+      360,
+      366,
+      383,
+      398,
+      406,
+      453,
+      458,
+      460,
+      461,
+      516,
+      518,
+      528,
+      529,
+      535,
+      552,
+      556,
+      564,
+      565,
+      614,
+      636,
+      659,
+      669,
+      677,
+      721,
+      723,
+      725,
+      816,
+      863,
+      933,
+      939,
+      963,
+      996,
+      1017,
+      1042,
+      1045,
+      1046,
+      1049,
+      1075,
+      1088,
+      1098,
+      1158,
+      1171,
+      1188,
+      1196,
+      1226,
+      1243,
+      1281,
+      1292,
+      1296,
+      1325,
+      1344,
+      1398
+    ],
+    "S04194": [
+      4,
       18,
       30,
       32,
@@ -3807,7 +3807,7 @@
       1366,
       1398
     ],
-    "S04272": [
+    "S04274": [
       4,
       15,
       23,
@@ -3970,7 +3970,7 @@
       1398,
       1402
     ],
-    "S04309": [
+    "S04311": [
       23,
       30,
       41,
@@ -4117,7 +4117,7 @@
       1398,
       1402
     ],
-    "S05806": [
+    "S05809": [
       4,
       30,
       35,
@@ -4265,7 +4265,7 @@
       1398,
       1402
     ],
-    "S05868": [
+    "S05871": [
       128,
       248,
       280,
@@ -4356,7 +4356,7 @@
       1372,
       1398
     ],
-    "S05917": [
+    "S05920": [
       4,
       15,
       23,
@@ -4462,7 +4462,7 @@
       1391,
       1402
     ],
-    "S06066": [
+    "S06069": [
       4,
       15,
       23,
@@ -4623,7 +4623,7 @@
       1398,
       1402
     ],
-    "S06109": [
+    "S06112": [
       4,
       15,
       30,
@@ -4782,7 +4782,7 @@
       1398,
       1402
     ],
-    "S06175": [
+    "S06178": [
       4,
       15,
       23,
@@ -4946,7 +4946,7 @@
       1398,
       1402
     ],
-    "S06197": [
+    "S06200": [
       4,
       18,
       30,
@@ -5164,7 +5164,7 @@
       1398,
       1404
     ],
-    "S06202": [
+    "S06205": [
       4,
       30,
       35,
@@ -5244,7 +5244,7 @@
       1344,
       1398
     ],
-    "S06204": [
+    "S06207": [
       4,
       18,
       30,
@@ -5432,7 +5432,7 @@
       1366,
       1398
     ],
-    "S06284": [
+    "S06287": [
       4,
       15,
       23,
@@ -5595,7 +5595,7 @@
       1398,
       1402
     ],
-    "S06321": [
+    "S06324": [
       23,
       30,
       41,
@@ -5742,7 +5742,7 @@
       1398,
       1402
     ],
-    "S07077": [
+    "S07080": [
       0,
       4,
       5,
@@ -6200,7 +6200,7 @@
       1404,
       1408
     ],
-    "S07093": [
+    "S07096": [
       4,
       30,
       35,
@@ -6304,7 +6304,7 @@
       1367,
       1398
     ],
-    "S07095": [
+    "S07098": [
       0,
       4,
       5,
@@ -6727,7 +6727,7 @@
       1401,
       1408
     ],
-    "S07101": [
+    "S07104": [
       4,
       30,
       35,
@@ -6874,7 +6874,7 @@
       1398,
       1404
     ],
-    "S07111": [
+    "S07114": [
       0,
       4,
       6,
@@ -7084,7 +7084,7 @@
       1404,
       1408
     ],
-    "S09874": [
+    "S09879": [
       52,
       86,
       96,
@@ -7211,7 +7211,7 @@
       1403,
       1405
     ],
-    "S10482": [
+    "S10487": [
       96,
       103,
       110,
@@ -7336,7 +7336,7 @@
       1403,
       1405
     ],
-    "S10503": [
+    "S10508": [
       23,
       52,
       86,
@@ -7451,7 +7451,7 @@
       1402,
       1405
     ],
-    "S10706": [
+    "S10711": [
       5,
       6,
       7,
@@ -7564,7 +7564,7 @@
       1183,
       1377
     ],
-    "S11560": [
+    "S11565": [
       4,
       30,
       35,
@@ -7669,7 +7669,7 @@
       1367,
       1398
     ],
-    "S11562": [
+    "S11567": [
       0,
       4,
       5,
@@ -8092,7 +8092,7 @@
       1401,
       1408
     ],
-    "S12574": [
+    "S12580": [
       4,
       30,
       35,
@@ -8197,7 +8197,7 @@
       1367,
       1398
     ],
-    "S12576": [
+    "S12582": [
       0,
       4,
       5,
@@ -8620,7 +8620,7 @@
       1401,
       1408
     ],
-    "S13515": [
+    "S13522": [
       4,
       30,
       35,
@@ -8728,7 +8728,7 @@
       1367,
       1398
     ],
-    "S13517": [
+    "S13524": [
       0,
       4,
       5,
@@ -9157,7 +9157,7 @@
       1401,
       1408
     ],
-    "S13523": [
+    "S13530": [
       4,
       30,
       35,
@@ -9317,7 +9317,7 @@
       1398,
       1404
     ],
-    "S14383": [
+    "S14391": [
       4,
       30,
       35,
@@ -9425,7 +9425,7 @@
       1367,
       1398
     ],
-    "S14385": [
+    "S14393": [
       0,
       4,
       5,
@@ -9853,7 +9853,7 @@
       1401,
       1408
     ],
-    "S14412": [
+    "S14420": [
       30,
       41,
       43,
@@ -9951,7 +9951,7 @@
       1344,
       1398
     ],
-    "S14420": [
+    "S14428": [
       30,
       38,
       41,
@@ -10098,7 +10098,7 @@
       1398,
       1404
     ],
-    "S14430": [
+    "S14438": [
       0,
       6,
       7,
@@ -10296,7 +10296,7 @@
       1404,
       1408
     ],
-    "S14496": [
+    "S14504": [
       108,
       156,
       166,
@@ -10394,7 +10394,7 @@
       1367,
       1398
     ],
-    "S14531": [
+    "S14539": [
       0,
       4,
       6,
